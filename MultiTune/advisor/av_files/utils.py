@@ -1,6 +1,5 @@
 import os
 import sys
-import pymysql
 import eventlet
 import time
 import csv

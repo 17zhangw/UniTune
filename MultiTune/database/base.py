@@ -1,3 +1,4 @@
+import random
 import os
 import pdb
 import sys
@@ -23,11 +24,16 @@ from ..utils.parser import strip_config
 sys.path.append('..')
 from ..utils.parser import parse_benchmark_result, is_where, flatten_comparison
 
+sys.path.append('../..')
+from envs.spaces.state_space import MetricStateSpace
+import gymnasium as gym
+
 
 class DB(ABC):
-    def __init__(self, task_id, dbtype, host, port, user, passwd, dbname, sock, cnf, knob_config_file, knob_num,
-                 workload_name, workload_timeout, workload_qlist_file, workload_qdir, q_mv_file, mv_trainset_dir, scripts_dir,
-                 log_path='./logs', result_path='./results', restart_wait_time=5, **kwargs
+    def __init__(self, task_id, dbtype, host, port, user, passwd, dbname, cnf, knob_config_file, knob_num,
+                 workload_name, workload_timeout, per_query_timeout,
+                 workload_qlist_file, workload_qdir, q_mv_file, mv_trainset_dir,
+                 log_path='./logs', result_path='./logs/results', restart_wait_time=5, **kwargs
                  ):
         # database
         self.task_id = task_id
@@ -37,7 +43,6 @@ class DB(ABC):
         self.user = user
         self.passwd = passwd
         self.dbname = dbname
-        self.sock = sock
         self.cnf = cnf
         self.all_pk_fk = None
         self.all_columns = None
@@ -55,17 +60,16 @@ class DB(ABC):
         # workload
         self.workload_name = workload_name.lower()
         self.workload_timeout = float(workload_timeout)
+        self.per_query_timeout = per_query_timeout == "on"
         self.minimum_timeout = float(workload_timeout)
         self.workload_qlist_file = workload_qlist_file
         self.workload_qdir = workload_qdir
         self.q_mv_file = q_mv_file
         self.mv_trainset_dir = mv_trainset_dir
-        self.scripts_dir = scripts_dir
         self.workload = self.generate_workload()
         self.queries = self.get_queries()
 
         # knob
-        self.mysql8 = eval(kwargs['mysql8'])
         self.knob_num = int(knob_num)
         self.knob_config_file = knob_config_file
         self.knob_details = self.get_knobs()
@@ -80,14 +84,15 @@ class DB(ABC):
         self.all_columns = self.get_all_columns()
         self.all_index_candidates = self.generate_candidates()
         self.get_all_index_sizes()
-        self.pre_combine_log_file_size = float(self.get_varialble_value("innodb_log_file_size")) * float(self.get_varialble_value("innodb_log_files_in_group"))
 
         self.reset_index()
         self.reset_knob()
         self.reset_all()
 
-        # internal metrics collect signal
-        self.im_alive_init()
+        self.state_space = MetricStateSpace(
+            mini_metric_state=False,
+            tables=self.all_columns.keys(),
+            seed=random.randint(0, 1e6))
 
     @abstractmethod
     def _connect_db(self):
@@ -126,10 +131,6 @@ class DB(ABC):
         pass
 
     @abstractmethod
-    def _show_processlist(self):
-        pass
-
-    @abstractmethod
     def _clear_processlist(self):
         pass
 
@@ -163,10 +164,6 @@ class DB(ABC):
 
     @abstractmethod
     def get_index_size(self):
-        pass
-
-    @abstractmethod
-    def get_each_index_size(self):
         pass
 
     @abstractmethod
@@ -230,35 +227,6 @@ class DB(ABC):
         current_indexes_dict = self.get_all_indexes(advisor_only=True)
         current_indexes = current_indexes_dict.keys()
         self.logger.debug('Index Config: {}'.format(index_config))
-        if  self.mysql8:
-            threadsL = []
-            recordL = []
-            advise_prefix = 'advisor'
-            for tab_col, v in index_config.items():
-                if v == 'on' and tab_col not in current_indexes:
-                    table, column = tab_col.split('.')
-                    name = '%s_%s' % (advise_prefix, column)
-                    sql = "CREATE INDEX %s ON %s (%s);" % (name, table, column)
-                    threadsL.append(threading.Thread( target=self._execute,args=(sql,) ))
-                    recordL.append(sql)
-
-                if v == 'off' and tab_col in current_indexes:
-                    table, column = tab_col.split('.')
-                    name = current_indexes_dict[tab_col]
-                    sql = "ALTER TABLE %s DROP INDEX %s;" % (table, name)
-                    threadsL.append(threading.Thread(target=self._execute, args=(sql,)))
-
-            self.logger.debug(recordL)
-            for t in threadsL:
-                t.start()
-            for t in threadsL:
-                t.join()
-            self._analyze_table()
-            self.logger.debug("Iteration {}: Index Configuration Applied!".format(self.iteration))
-            self.logger.debug('Index Config: {}'.format(index_config))
-
-            return
-
         for tab_col, v in index_config.items():
             if v == 'on' and tab_col not in current_indexes:
                 table, column = tab_col.split('.')
@@ -325,10 +293,12 @@ class DB(ABC):
             workload_qlist_file = self.workload_qlist_file
             
         if self.workload_name in ['tpch', 'job', 'tpcds']:
-            script = os.path.join(self.scripts_dir, 'run_{}.sh'.format(self.dbtype))
             wl = {
                 'type': 'read',
-                'cmd': 'bash %s %s %s {output} %s %s %s' % (script, workload_qdir, workload_qlist_file, self.sock, self.dbname, self.workload_timeout * 1000)
+                'workload_qdir': workload_qdir,
+                'workload_qlist_qfile': workload_qlist_file,
+                'workload_timeout': self.workload_timeout,
+                'per_query_timeout': self.per_query_timeout,
             }
         else:
             raise ValueError('Invalid workload name')
@@ -347,14 +317,6 @@ class DB(ABC):
         return queries
 
     def generate_candidates(self):
-        if self.mysql8:
-            with open('/tmp/indexsize.json') as f:
-                config = json.load(f)
-                result = list(config.keys())
-                result.sort()
-                self.logger.info('Initialize {} Indexes'.format(len(result)))
-                return result
-
         all_used_columns = set()
         for i, sql in enumerate(self.queries):
 
@@ -392,8 +354,8 @@ class DB(ABC):
                 #
                 # all_used_columns.update(used_columns)
 
-            except:
-                print(f'{i+1}.sql ')
+            except Exception as e:
+                print(f'{i+1}.sql ', e)
                 # print(sqlparse.format(sql, reindent=True))
                 continue
 
@@ -423,12 +385,7 @@ class DB(ABC):
     def generate_benchmark_cmd(self):
         timestamp = int(time.time())
         filename = self.result_path + '/{}.log'.format(timestamp)
-
-        if self.workload_name in ['tpch', 'job', 'tpcds']:
-            cmd = self.workload['cmd'].format(output=filename)
-        else:
-            raise ValueError('Invalid workload name')
-        return cmd, filename
+        return self.workload, filename
 
     def setup_logger(self):
         if not os.path.exists(self.log_path):
@@ -506,47 +463,21 @@ class DB(ABC):
         self.apply_index_config(index_config)
 
         # # collect internal metrics
-        internal_metrics = Manager().list()
-        im = mp.Process(target=self.get_internal_metrics, args=(internal_metrics, self.workload_timeout, 0))
-        self.set_im_alive(True)
-        if collect_im:
-            im.start()
+        conn = self._connect_db()
+        initial_metrics = self.state_space.construct_online(connection=conn)
 
         # run benchmark
-        timeout = False
-        cmd, filename = self.generate_benchmark_cmd()
+        workload, filename = self.generate_benchmark_cmd()
 
         self.logger.debug("Iteration {}: Benchmark start, saving results to {}!".format(self.iteration, filename))
-        self.logger.info(cmd)
-        p_benchmark = subprocess.Popen(cmd, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE,
-                                       close_fds=True)
-        self.logger.info(cmd)
 
-        try:
-            p_benchmark.communicate(timeout=self.workload_timeout)
-            p_benchmark.poll()
-            self.logger.debug("Iteration {}: Benchmark finished!".format(self.iteration))
-
-        except subprocess.TimeoutExpired:
-            timeout = True
-            self.logger.debug("Iteration {}: Benchmark timeout!".format(self.iteration))
-            self._clear_processlist()
-
-            self.logger.debug("Iteration {}: Clear database processes!".format(self.iteration))
+        # run the benchmark...
+        self._run_workload(workload, filename)
 
         # stop collecting internal metrics
-        im_result = []
-        if collect_im:
-            self.set_im_alive(False)
-            im.join()
-
-            keys = list(internal_metrics[0].keys())
-            keys.sort()
-            im_result = np.zeros(len(keys))
-            for idx in range(len(keys)):
-                key = keys[idx]
-                data = [x[key] for x in internal_metrics]
-                im_result[idx] = float(sum(data)) / len(data)
+        final_metrics = self.state_space.construct_online(connection=conn)
+        delta = self.state_space.construct_metric_delta(initial_metrics, final_metrics)
+        im_result = gym.spaces.utils.flatten(self.state_space, delta)
 
         # get costs
         time.sleep(1)
@@ -554,13 +485,13 @@ class DB(ABC):
 
         if self.workload_name in ['tpch', 'job', 'tpcds']:
             dirname, _ = os.path.split(os.path.abspath(__file__))
-            time_cost, lat_mean, time_cost_dir = parse_benchmark_result(filename, workload_qlist_file, self.workload_timeout)
+            time_cost, lat_mean, time_cost_dir = parse_benchmark_result(filename, workload_qlist_file, self.workload_timeout, self.per_query_timeout)
             self.time_cost_dir = time_cost_dir
         else:
             raise ValueError
 
-        self.logger.info("Iteration {}: configuration {}\t time_cost {}\t space_cost {}\t timeout {} \t lat_mean {}".format(
-            self.iteration, config, time_cost, space_cost, timeout, lat_mean))
+        self.logger.info("Iteration {}: configuration {}\t time_cost {}\t space_cost {}\t lat_mean {}".format(
+            self.iteration, config, time_cost, space_cost, lat_mean))
 
         if time_cost < self.minimum_timeout:
             self.minimum_timeout = time_cost
@@ -597,11 +528,7 @@ class DB(ABC):
         return internal_metrics
 
     def get_knobs(self):
-        if self.mysql8:
-            blacklist = ['query_cache_min_res_unit', 'query_cache_size']
-        else:
-            blacklist = []
-
+        blacklist = []
         with open(self.knob_config_file, 'r') as f:
             knob_tmp = json.load(f)
             knobs = list(knob_tmp.keys())

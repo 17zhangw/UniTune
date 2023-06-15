@@ -21,7 +21,7 @@ from MultiTune.utils.ddpg.ddpg import DDPG
 sys.path.append('//MultiTune')
 from MultiTune.utils.parser import parse_args, initialize_knobs, gen_continuous
 from MultiTune.database.base import DB
-from MultiTune.database.mysqldb import MysqlDB
+from MultiTune.database.postgresdb import PostgresDB
 
 
 def create_output_folders():

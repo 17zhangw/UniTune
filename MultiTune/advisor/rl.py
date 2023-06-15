@@ -21,7 +21,7 @@ from MultiTune.utils.ddpg.ddpg import DDPG
 sys.path.append('//MultiTune')
 from MultiTune.utils.parser import parse_args, initialize_knobs, gen_continuous
 from MultiTune.database.base import DB
-from MultiTune.database.mysqldb import MysqlDB
+from MultiTune.database.postgresdb import PostgresDB
 
 
 def create_output_folders():
@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
     args_db, args_tune = parse_args('//MultiTune/config.ini')
     args = parse_cmd_args()
-    db = MysqlDB(args_tune['task_id'], **args_db)
+    db = PostgresDB(args_tune['task_id'], **args_db)
     adviser = RL(db=db, tune_index='False', tune_knob='True', **args_tune)
     adviser.reset_contex(np.random.uniform(size=65), 570)
     adviser.run()

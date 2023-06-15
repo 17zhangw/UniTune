@@ -65,11 +65,11 @@ def parse_args(config_file='config.ini'):
     config_dict = cf.get_dict()
     config_dict['tune']['components'] = eval(config_dict['tune']['components'])
     config_dict['tune']['arms'] = str(list(config_dict['tune']['components'].keys()))
-    config_dict['tune']['output_file'] = os.path.join('optimize_history', config_dict['tune']['task_id'] + '.res')
+    assert "output_file" in config_dict["tune"]
     return config_dict['database'], config_dict['tune']
 
 
-def parse_benchmark_result(file_path, select_file, timeout=10):
+def parse_benchmark_result(file_path, select_file, timeout=10, per_query_timeout=False):
     with open(file_path) as f:
         lines = f.readlines()
 
@@ -88,10 +88,11 @@ def parse_benchmark_result(file_path, select_file, timeout=10):
         lat_dir[type] = float(tmp) / 1000
 
     for i in range(0, num_sql - len(lines[1:])):
-        latL.append(timeout)
+        latL.append(timeout if not per_query_timeout else int(timeout / num_sql))
 
     #lat95 = np.percentile(latL, 95)
-    lat = np.max(latL)
+    # Because we are running every query one after another, lat = sum().
+    lat = np.sum(latL)
     lat_mean = np.mean(latL)
 
     return lat, lat_mean, lat_dir

@@ -28,7 +28,7 @@ from MultiTune.utils.limit import time_limit,  TimeoutException
 sys.path.append('//MultiTune')
 from MultiTune.utils.parser import parse_args
 from MultiTune.database.base import DB
-from MultiTune.database.mysqldb import MysqlDB
+from MultiTune.database.postgresdb import PostgresDB
 
 
 class RLEstimator(Advisor): 
@@ -140,7 +140,7 @@ if __name__ == "__main__":
 
     args_db, args_tune = parse_args()
     args = parse_cmd_args()
-    db = MysqlDB(args_tune['task_id'], **args_db)
+    db = PostgresDB(args_tune['task_id'], **args_db)
     adviser = RLEstimator(db=db, **args_tune)
     adviser.run()
 

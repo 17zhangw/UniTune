@@ -63,8 +63,6 @@ workload_timeout = 600
 workload_qlist_file = /MultiTune/scripts/tpch_queries_list_0.txt
 # workload queries directory
 workload_qdir = /MultiTune/queries/tpch_queries_mysql_0/
-# workload run_scripts directory
-scripts_dir = /MultiTune/scripts/
 # view generation dir
 q_mv_file = /MultiTune/advisor/av_files/trainset/q_mv_list.txt
 mv_trainset_dir = /MultiTune/advisor/av_files/trainset

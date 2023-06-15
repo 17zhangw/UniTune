@@ -1,0 +1,536 @@
+{
+    "autovacuum": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "autovacuum_analyze_threshold": {
+        "default": 50,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 2147483647,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "autovacuum_analyze_threshold": {
+        "default": 0.1,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 1,
+        "scope": "Global",
+        "type": "float"
+    },
+    "autovacuum_max_workers": {
+        "default": 3,
+        "dynamic": "Yes",
+        "min": 1,
+        "max": 20,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "autovacuum_naptime": {
+        "default": 60,
+        "dynamic": "Yes",
+        "min": 1,
+        "max": 300,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "autovacuum_vacuum_cost_delay": {
+        "default": 2,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 100,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "autovacuum_vacuum_cost_limit": {
+        "default": 200,
+        "dynamic": "Yes",
+        "min": 1,
+        "max": 10000,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "autovacuum_vacuum_threshold": {
+        "default": 50,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 2147483647,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "autovacuum_vacuum_insert_threshold": {
+        "default": 1000,
+        "dynamic": "Yes",
+        "min": -1,
+        "max": 2147483647,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "autovacuum_vacuum_scale_factor": {
+        "default": 0.2,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 100,
+        "scope": "Global",
+        "type": "float"
+    },
+    "autovacuum_vacuum_insert_scale_factor": {
+        "default": 0.2,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 100,
+        "scope": "Global",
+        "type": "float"
+    },
+    "autovacuum_work_mem": {
+        "default": 65536,
+        "dynamic": "Yes",
+        "min": 1024,
+        "max": 4194304,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "backend_flush_after": {
+        "default": 0,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 256,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "bgwriter_delay": {
+        "default": 200,
+        "dynamic": "Yes",
+        "min": 10,
+        "max": 10000,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "bgwriter_flush_after": {
+        "default": 64,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 256,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "bgwriter_lru_maxpages": {
+        "default": 100,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 4194304,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "bgwriter_lru_multiplier": {
+        "default": 2.0,
+        "dynamic": "Yes",
+        "min": 0.0,
+        "max": 10.0,
+        "scope": "Global",
+        "type": "float"
+    },
+    "checkpoint_completion_target": {
+        "default": 0.9,
+        "dynamic": "Yes",
+        "min": 0.0,
+        "max": 1.0,
+        "scope": "Global",
+        "type": "float"
+    },
+    "checkpoint_timeout": {
+        "default": 300,
+        "dynamic": "Yes",
+        "min": 30,
+        "max": 300,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "checkpoint_flush_after": {
+        "default": 32,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 256,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "commit_delay": {
+        "default": 0,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 100000,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "commit_siblings": {
+        "default": 5,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 20,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "deadlock_timeout": {
+        "default": 1000,
+        "dynamic": "Yes",
+        "min": 1,
+        "max": 1000000,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "jit": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "jit_expressions": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "jit_above_cost": {
+        "default": 100000,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 1.0E+8,
+        "scope": "Global",
+        "type": "float"
+    },
+    "jit_inline_above_cost": {
+        "default": 500000,
+        "dynamic": "Yes",
+        "min": -1,
+        "max": 1.0E+8,
+        "scope": "Global",
+        "type": "float"
+    },
+    "jit_optimize_above_cost": {
+        "default": 500000,
+        "dynamic": "Yes",
+        "min": -1,
+        "max": 1.0E+8,
+        "scope": "Global",
+        "type": "float"
+    },
+    "jit_tuple_deforming": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "effective_cache_size": {
+        "default": 524288,
+        "dynamic": "Yes",
+        "min": 1,
+        "max": 4194304,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "effective_io_concurrency": {
+        "default": 1,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 1000,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "maintenance_io_concurrency": {
+        "default": 10,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 1000,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "enable_indexonlyscan": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "enable_bitmapscan": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "enable_indexscan": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "enable_seqscan": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "enable_tidscan": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "enable_sort": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "enable_gathermerge": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "enable_mergejoin": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "enable_hashjoin": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "enable_hashagg": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "enable_nestloop": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "enable_parallel_hash": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "enable_material": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "enable_memoize": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "random_page_cost": {
+        "default": 4,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 2048,
+        "scope": "Global",
+        "type": "float"
+    },
+    "seq_page_cost": {
+        "default": 1,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 2048,
+        "scope": "Global",
+        "type": "float"
+    },
+    "max_worker_processes": {
+        "default": 8,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 20,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "max_parallel_workers": {
+        "default": 8,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 20,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "max_parallel_workers_per_gather": {
+        "default": 2,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 20,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "max_parallel_maintenance_workers": {
+        "default": 2,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 20,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "wal_buffers": {
+        "default": 8,
+        "dynamic": "Yes",
+        "min": 8,
+        "max": 16384,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "wal_compression": {
+        "default": "on",
+        "dynamic": "Yes",
+        "enum_values": [
+            "on",
+            "off"
+        ],
+        "scope": "Global",
+        "type": "enum"
+    },
+    "wal_writer_delay": {
+        "default": 200,
+        "dynamic": "Yes",
+        "min": 1,
+        "max": 1000,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "wal_writer_flush_after": {
+        "default": 128,
+        "dynamic": "Yes",
+        "min": 0,
+        "max": 2097152,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "max_wal_size": {
+        "default": 1024,
+        "dynamic": "Yes",
+        "min": 32,
+        "max": 16384,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "min_wal_size": {
+        "default": 1024,
+        "dynamic": "Yes",
+        "min": 32,
+        "max": 16384,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "hash_mem_multiplier": {
+        "default": 2,
+        "dynamic": "Yes",
+        "min": 1,
+        "max": 1000,
+        "scope": "Global",
+        "type": "float"
+    },
+    "maintenance_work_mem": {
+        "default": 65536,
+        "dynamic": "Yes",
+        "min": 1024,
+        "max": 4194304,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "shared_buffers": {
+        "default": 16384,
+        "dynamic": "Yes",
+        "min": 256,
+        "max": 4194304,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "work_mem": {
+        "default": 4096,
+        "dynamic": "Yes",
+        "min": 64,
+        "max": 4194304,
+        "scope": "Global",
+        "type": "integer"
+    }
+}

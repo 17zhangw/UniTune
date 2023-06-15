@@ -46,7 +46,7 @@ from org.apache.calcite.rel.rules import FilterJoinRule, AggregateExtractProject
 
 from org.apache.calcite.schema import SchemaPlus
 from org.apache.calcite.sql import SqlNode, SqlDialect
-from org.apache.calcite.sql.dialect import CalciteSqlDialect, PostgresqlSqlDialect, MysqlSqlDialect
+from org.apache.calcite.sql.dialect import CalciteSqlDialect, PostgresqlSqlDialect
 from org.apache.calcite.tools import FrameworkConfig, Frameworks, Planner, RelBuilderFactory
 from org.apache.calcite.util import SourceStringReader
 
@@ -78,7 +78,7 @@ class Rewriter():
         try:
             if dialect: pass
         except:
-            dialect = MysqlSqlDialect.DEFAULT  # PostgresqlSqlDialect.DEFAULT
+            dialect = PostgresqlSqlDialect.DEFAULT  # PostgresqlSqlDialect.DEFAULT
         # print('dialect configured')
 
         # rule list
