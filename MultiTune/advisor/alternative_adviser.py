@@ -170,6 +170,7 @@ class TopAdvisor(ABC):
                         for _arm in self.arms:
                             self.best_result[_arm]['context'] = np.array(tmp['context'], dtype=np.float32)
                     if self.context_type == 'config':
+                        assert False
                         for _arm in self.arms:
                             self.observe_context(_arm)
 
@@ -246,6 +247,7 @@ class TopAdvisor(ABC):
                     if self.context_type == 'im':
                         context = tmp['context']
                     else:
+                        assert False
                         self.observe_context(arm)
                         context = self.best_result[arm]['context']
                     self.block_advisor[arm].model.config_advisor.history_container.update_observation(Observation(
@@ -282,6 +284,7 @@ class TopAdvisor(ABC):
                 if self.context_type == 'im':
                     self.best_result[arm]['context'] =  np.array(tmp['context'])
                 elif self.context_type == 'config':
+                    assert False
                     self.observe_context(arm)
 
             if i == len(lines_no_best) - 1 or arm_ids[i] != arm_ids[i+1] :
@@ -319,6 +322,7 @@ class TopAdvisor(ABC):
                                         self.observe_context(_arm)
 
                         elif self.context_type == 'config':
+                            assert False
                             for _arm in self.arms:
                                 if not _arm == arm:
                                     self.observe_context(_arm)
@@ -598,6 +602,7 @@ class TopAdvisor(ABC):
                     'context': internal_metrics.tolist(),
                 }))
         elif self.context_type == 'config':
+            assert False
             if arm == 'index':
                 config = self.best_result['knob']['config']
                 self.best_result[arm]['context'] =  Configuration(BOAdvisor.setup_config_space('knob', db=self.db), config).get_array()

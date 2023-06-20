@@ -184,6 +184,14 @@ class DB(ABC):
 
         # check scale
         for k, v in knob_config.items():
+            if "." in k and k.split(".")[0] == "index":
+                continue
+
+            kv = k.split(".")[1] if "." in k else k
+            if kv not in self.knob_details:
+                self.logger.debug("SKIPPING {} in apply_knob_config".format(kv))
+                continue
+
             if self.knob_details[k.split('.')[1] if '.' in k else k]['type'] == 'integer' and self.knob_details[k.split('.')[1] if '.' in k else k]['max'] > sys.maxsize:
                 _knob_config[k] = knob_config[k] * 1000
             else:
@@ -228,6 +236,10 @@ class DB(ABC):
         current_indexes = current_indexes_dict.keys()
         self.logger.debug('Index Config: {}'.format(index_config))
         for tab_col, v in index_config.items():
+            if "." not in tab_col:
+                self.logger.debug("SKIPPING due to encountered: {}", tab_col)
+                continue
+
             if v == 'on' and tab_col not in current_indexes:
                 table, column = tab_col.split('.')
                 self._create_index(table, column)
