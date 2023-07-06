@@ -397,6 +397,15 @@ class PostgresDB(DB):
             return tend - tstart
 
     def _run_workload(self, workload, filename):
+        def _force_statement_timeout(conn, timeout):
+            retry = True
+            while retry:
+                try:
+                    conn.execute(f"set statement_timeout = {timeout * 1000}")
+                    retry = False
+                except:
+                    pass
+
         with open(filename, "w") as f:
             f.write("query\tlat(ms)\n")
 
@@ -420,17 +429,18 @@ class PostgresDB(DB):
                 current_timeout = int(current_timeout / len(sqls))
 
             for (query, query_sql) in sqls:
-                try:
-                    # Run the warmup query.
-                    conn.execute("set statement_timeout = %d" % (current_timeout * 1000))
-                    conn.execute(query_sql)
-                except:
-                    conn.execute("drop view if exists revenue0_PID;")
+                #try:
+                #    # Run the warmup query.
+                #    conn.execute("set statement_timeout = %d" % (current_timeout * 1000))
+                #    conn.execute(query_sql)
+                #except:
+                #    conn.execute("drop view if exists revenue0_PID;")
 
                 try:
                     # Run the real query.
                     self.logger.debug(f"current timeout: {current_timeout}")
-                    conn.execute("set statement_timeout = %d" % (current_timeout * 1000))
+                    _force_statement_timeout(conn, current_timeout)
+
                     start_time = time.time()
                     conn.execute(query_sql)
                     finish_time = time.time()
@@ -455,7 +465,7 @@ class PostgresDB(DB):
                     current_timeout = current_timeout - duration
 
             # reset the timeout to the default configuration
-            conn.execute("set statement_timeout = 0;")
+            _force_statement_timeout(conn, 0)
             conn.execute("drop view if exists revenue0_PID;")
             self.logger.debug(f"runtime {run_time}")
             conn.close()
