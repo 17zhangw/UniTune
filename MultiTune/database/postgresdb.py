@@ -417,7 +417,7 @@ class PostgresDB(DB):
                 for qfile in q:
                     qfile = qfile.strip()
 
-                    query = int(qfile.split(".")[0])
+                    query = qfile.split(".")[0]
                     qfile = f"{workload_qdir}/{qfile}"
                     with open(qfile, "r") as qq:
                         ss = qq.read().strip()
