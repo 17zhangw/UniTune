@@ -237,7 +237,7 @@ class DB(ABC):
         self.logger.debug('Index Config: {}'.format(index_config))
         for tab_col, v in index_config.items():
             if "." not in tab_col:
-                self.logger.debug("SKIPPING due to encountered: {}", tab_col)
+                self.logger.debug("SKIPPING due to encountered: {}".format(tab_col))
                 continue
 
             if v == 'on' and tab_col not in current_indexes:

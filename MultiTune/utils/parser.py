@@ -87,13 +87,16 @@ def parse_benchmark_result(file_path, select_file, timeout=10, per_query_timeout
         type = line.split('\t')[0].strip()
         lat_dir[type] = float(tmp) / 1000
 
-    for i in range(0, num_sql - len(lines[1:])):
-        latL.append(timeout if not per_query_timeout else int(timeout / num_sql))
-
-    #lat95 = np.percentile(latL, 95)
-    # Because we are running every query one after another, lat = sum().
-    lat = np.sum(latL)
-    lat_mean = np.mean(latL)
+    if not per_query_timeout and len(latL) != num_sql:
+        lat = timeout
+        lat_mean = timeout / num_sql
+    else:
+        for i in range(0, num_sql - len(lines[1:])):
+            latL.append(timeout if not per_query_timeout else int(timeout / num_sql))
+        #lat95 = np.percentile(latL, 95)
+        # Because we are running every query one after another, lat = sum().
+        lat = np.sum(latL)
+        lat_mean = np.mean(latL)
 
     return lat, lat_mean, lat_dir
 
