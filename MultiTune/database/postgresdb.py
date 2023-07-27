@@ -20,12 +20,48 @@ from ..utils.limit import time_limit,  TimeoutException
 from .base import DB
 import psycopg
 from psycopg.errors import QueryCanceled, InternalError
+import concurrent.futures
+
+
+def _force_statement_timeout(conn, timeout):
+    retry = True
+    while retry:
+        try:
+            conn.execute(f"set statement_timeout = {timeout * 1000}")
+            retry = False
+        except:
+            pass
+
+
+def run_query(conn, query_sql, timeout):
+    timed_out = False
+    _force_statement_timeout(conn, timeout)
+    try:
+        # Run the real query.
+        start_time = time.time()
+        conn.execute(query_sql)
+        runtime = time.time() - start_time
+    except QueryCanceled:
+        runtime = timeout
+        timed_out = True
+    except InternalError:
+        runtime = timeout
+        timed_out = True
+
+    _force_statement_timeout(conn, 0)
+    return runtime, timed_out
+
+
+def parallel_run_query(args):
+    conn_str, qid, query_sql, timeout = args
+    with psycopg.connect(conn_str, autocommit=True, prepare_threshold=None) as conn:
+        runtime, timed_out = run_query(conn, query_sql, timeout)
+    return qid, runtime, timed_out
 
 
 class PostgresDB(DB):
     def __init__(self, *args, postgres, **kwargs):
         self.postgres = postgres
-        
 
         # internal metrics collect signal
         self.sql_dict = {
@@ -35,17 +71,17 @@ class PostgresDB(DB):
 
         super().__init__(*args, **kwargs)
 
-    def _connect_db(self):
-        conn = psycopg.connect(
-            "host={host} port={port} dbname={dbname} user={user} password={password}".format(
+    def _connect_str(self):
+        return "host={host} port={port} dbname={dbname} user={user} password={password}".format(
                 host=self.host,
                 port=int(self.port),
                 dbname=self.dbname,
                 user=self.user,
                 password=self.passwd
-            ),
-            autocommit=True,
-            prepare_threshold=None)
+        )
+
+    def _connect_db(self):
+        conn = psycopg.connect(self._connect_str(), autocommit=True, prepare_threshold=None)
         return conn
 
     def _execute(self, sql, conn=None):
@@ -397,19 +433,8 @@ class PostgresDB(DB):
             return tend - tstart
 
     def _run_workload(self, workload, filename):
-        def _force_statement_timeout(conn, timeout):
-            retry = True
-            while retry:
-                try:
-                    conn.execute(f"set statement_timeout = {timeout * 1000}")
-                    retry = False
-                except:
-                    pass
-
         with open(filename, "w") as f:
             f.write("query\tlat(ms)\n")
-
-            conn = self._connect_db()
 
             workload_qdir = workload["workload_qdir"]
             sqls = []
@@ -423,52 +448,52 @@ class PostgresDB(DB):
                         ss = qq.read().strip()
                     sqls.append((query, ss))
 
-            run_time = []
-            current_timeout = workload["workload_timeout"]
-            if workload["per_query_timeout"]:
-                current_timeout = int(current_timeout / len(sqls))
+            if not workload["parallel_query_eval"]:
+                run_time = []
+                conn = self._connect_db()
+                current_timeout = workload["workload_timeout"]
+                if workload["per_query_timeout"]:
+                    current_timeout = int(current_timeout / len(sqls))
 
-            for (query, query_sql) in sqls:
-                #try:
-                #    # Run the warmup query.
-                #    conn.execute("set statement_timeout = %d" % (current_timeout * 1000))
-                #    conn.execute(query_sql)
-                #except:
-                #    conn.execute("drop view if exists revenue0_PID;")
+                # Run serially.
+                for (qid, query_sql) in sqls:
+                    runtime, timed_out = run_query(conn, query_sql, current_timeout)
+                    self.logger.debug(f"{qid}: {runtime} {timed_out}")
+                    run_time.append(runtime)
 
-                try:
-                    # Run the real query.
-                    self.logger.debug(f"current timeout: {current_timeout}")
-                    _force_statement_timeout(conn, current_timeout)
-
-                    start_time = time.time()
-                    conn.execute(query_sql)
-                    finish_time = time.time()
-                    duration = finish_time - start_time
-                except QueryCanceled:
-                    # Only break out if we are using a "workload timeout".
                     if not workload["per_query_timeout"]:
-                        break
-                    else:
-                        duration = current_timeout
-                except InternalError:
-                    # error to run the query, set duration to a large number
-                    self.logger.debug(f"Internal Error for query {query_sql}")
-                    if not workload["per_query_timeout"]:
-                        break
-                    else:
-                        duration = current_timeout
+                        # We are using a workload timeout for running serially.
+                        if timed_out:
+                            # We've timed out of the entire budget so stop.
+                            break
 
-                self.logger.debug(f"duration: {duration}")
-                run_time.append(duration)
-                if not workload["per_query_timeout"]:
-                    current_timeout = current_timeout - duration
+                        # Adjust remaining time.
+                        current_timeout = current_timeout - runtime
 
-            # reset the timeout to the default configuration
-            _force_statement_timeout(conn, 0)
-            conn.execute("drop view if exists revenue0_PID;")
-            self.logger.debug(f"runtime {run_time}")
-            conn.close()
+                # reset the timeout to the default configuration
+                _force_statement_timeout(conn, 0)
+                conn.execute("drop view if exists revenue0_PID;")
+                conn.close()
 
-            for (query, _), duration in zip(sqls[:len(run_time)], run_time):
-                f.write(f"{query}\t{duration * 1000}\n")
+                for (query, _), duration in zip(sqls[:len(run_time)], run_time):
+                    f.write(f"{query}\t{duration * 1000}\n")
+
+            else:
+                assert workload["per_query_timeout"]
+                timeout = int(workload["workload_timeout"] / len(sqls))
+                conn_str = self._connect_str()
+
+                max_workers = workload["parallel_max_workers"] if workload["parallel_max_workers"] > 0 else None
+                results = {}
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    tasks = [(conn_str, qid, qsql, timeout) for qid, qsql in sqls]
+                    futures = {executor.submit(parallel_run_query, (conn_str, qid, qsql, timeout)) for qid, qsql in sqls}
+                    for future in concurrent.futures.as_completed(futures):
+                        qid, runtime, _ = future.result()
+                        results[qid] = runtime
+                        self.logger.debug(f"{qid}: {runtime}")
+
+                for (qid, _) in sqls:
+                    assert qid in results
+                    duration = results[qid]
+                    f.write(f"{qid}\t{duration * 1000}\n")

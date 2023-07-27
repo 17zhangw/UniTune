@@ -70,12 +70,14 @@ def parse_args(config_file='config.ini'):
 
 
 def parse_benchmark_result(file_path, select_file, timeout=10, per_query_timeout=False):
-    with open(file_path) as f:
-        lines = f.readlines()
-
+    # Number of queries.
     with open(select_file) as f:
         lines_select = f.readlines()
     num_sql = len(lines_select)
+
+    # Construct the latency information.
+    with open(file_path) as f:
+        lines = f.readlines()
 
     latL = []
     lat_dir = {}
@@ -88,11 +90,17 @@ def parse_benchmark_result(file_path, select_file, timeout=10, per_query_timeout
         lat_dir[type] = float(tmp) / 1000
 
     if not per_query_timeout and len(latL) != num_sql:
+        # In this case, we exceeded the workload timeout.
         lat = timeout
         lat_mean = timeout / num_sql
+    elif not per_query_timeout and len(latL) == num_sql:
+        # We have all the queries.
+        lat = np.sum(latL)
+        lat_mean = np.mean(latL)
     else:
+        # For every query we are "missing", pad it out.
         for i in range(0, num_sql - len(lines[1:])):
-            latL.append(timeout if not per_query_timeout else int(timeout / num_sql))
+            latL.append(int(timeout / num_sql))
         #lat95 = np.percentile(latL, 95)
         # Because we are running every query one after another, lat = sum().
         lat = np.sum(latL)

@@ -31,8 +31,8 @@ import gymnasium as gym
 
 class DB(ABC):
     def __init__(self, task_id, dbtype, host, port, user, passwd, dbname, cnf, knob_config_file, knob_num,
-                 workload_name, workload_timeout, per_query_timeout,
-                 workload_qlist_file, workload_qdir, q_mv_file, mv_trainset_dir,
+                 workload_name, workload_timeout, per_query_timeout, parallel_query_eval,
+                 parallel_max_workers, workload_qlist_file, workload_qdir, q_mv_file, mv_trainset_dir,
                  log_path='./logs', result_path='./logs/results', restart_wait_time=5, **kwargs
                  ):
         # database
@@ -61,6 +61,8 @@ class DB(ABC):
         self.workload_name = workload_name.lower()
         self.workload_timeout = float(workload_timeout)
         self.per_query_timeout = per_query_timeout == "on"
+        self.parallel_query_eval = parallel_query_eval == "on"
+        self.parallel_max_workers = int(parallel_max_workers)
         self.minimum_timeout = float(workload_timeout)
         self.workload_qlist_file = workload_qlist_file
         self.workload_qdir = workload_qdir
@@ -311,6 +313,8 @@ class DB(ABC):
                 'workload_qlist_qfile': workload_qlist_file,
                 'workload_timeout': self.workload_timeout,
                 'per_query_timeout': self.per_query_timeout,
+                'parallel_query_eval': self.parallel_query_eval,
+                'parallel_max_workers': self.parallel_max_workers,
             }
         else:
             raise ValueError('Invalid workload name')
