@@ -1,3 +1,4 @@
+import traceback
 import random
 import os
 import pdb
@@ -185,6 +186,7 @@ class DB(ABC):
         _knob_config = {}
 
         # check scale
+        did_print = False
         for k, v in knob_config.items():
             if "." in k and k.split(".")[0] == "index":
                 continue
@@ -192,6 +194,9 @@ class DB(ABC):
             kv = k.split(".")[1] if "." in k else k
             if kv not in self.knob_details:
                 self.logger.debug("SKIPPING {} in apply_knob_config".format(kv))
+                if not did_print:
+                    self.logger.debug(repr(traceback.extract_stack()))
+                    did_print = True
                 continue
 
             if self.knob_details[k.split('.')[1] if '.' in k else k]['type'] == 'integer' and self.knob_details[k.split('.')[1] if '.' in k else k]['max'] > sys.maxsize:
@@ -237,9 +242,13 @@ class DB(ABC):
         current_indexes_dict = self.get_all_indexes(advisor_only=True)
         current_indexes = current_indexes_dict.keys()
         self.logger.debug('Index Config: {}'.format(index_config))
+        did_print = False
         for tab_col, v in index_config.items():
             if "." not in tab_col:
                 self.logger.debug("SKIPPING due to encountered: {}".format(tab_col))
+                if not did_print:
+                    self.logger.debug(repr(traceback.extract_stack()))
+                    did_print = True
                 continue
 
             if v == 'on' and tab_col not in current_indexes:

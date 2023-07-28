@@ -208,7 +208,7 @@ class PostgresDB(DB):
 
     def _create_index(self, table, column, name=None, advise_prefix='advisor'):
         if name is None:
-            name = '%s_%s' % (advise_prefix, column)
+            name = '%s_%s_%s' % (advise_prefix, table, column)
         sql = "CREATE INDEX %s ON %s (%s);" % (name, table, column)
         try:
             self._execute(sql)
