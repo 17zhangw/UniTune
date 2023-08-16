@@ -214,10 +214,12 @@ class DB(ABC):
 
 
     def apply_query_config(self, query_config):
+        assert list(query_config.keys())[0] == "query.file_id"
         v = query_config[list(query_config.keys())[0]]
-        self.workload_qdir = self.workload_qdir.replace(self.workload_qdir.split('_')[-1], str(v)) + '/'
-        self.workload_qlist_file = self.workload_qlist_file.replace(self.workload_qlist_file.split('_')[-1], str(v)) + '.txt'
-        self.workload = self.generate_workload(self.workload_qdir, self.workload_qlist_file)
+        if str(v) != "0":
+            self.workload_qdir = "logs/workload_qdirs/" + str(v) + "/"
+            self.workload_qlist_file = "logs/workload_qdirs/" + str(v) + ".txt"
+            self.workload = self.generate_workload(self.workload_qdir, self.workload_qlist_file)
 
 
     def apply_config(self,type, config):
@@ -469,10 +471,10 @@ class DB(ABC):
                 knob_config[k[5:]] = v
             elif k.startswith('view.'):
                 view_config[k]= v
-            elif k.startswith('query.') and not str(v) == '':
+            elif k.startswith('query.') and not str(v) == '' and str(v) != "0":
                 self.logger.debug("Iteration {}: Query Configuration Applied!".format(self.iteration))
-                q_dir = self.workload_qdir.replace(self.workload_qdir.split('_')[-1], str(v)) + '/'
-                workload_qlist_file = self.workload_qlist_file.replace(self.workload_qlist_file.split('_')[-1], str(v)) + '.txt'
+                q_dir = "logs/workload_qdirs/" + str(v) + "/"
+                workload_qlist_file = "logs/workload_qdirs/" + str(v) + ".txt"
                 self.workload = self.generate_workload(q_dir, workload_qlist_file)
         self._close_db()
         self.apply_knob_config(knob_config)

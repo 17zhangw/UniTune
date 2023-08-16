@@ -341,8 +341,7 @@ class PostgresDB(DB):
         try:
             with time_limit(5):
                 output = self._fetch_results(sql, json=False)
-                explain = json.loads(output[0][0])
-                cost = explain[0]["Plan"]["Total Cost"]
+                cost = output[0][0][0]["Plan"]["Total Cost"]
         except Exception as e:
             cost = 0
             if isinstance(e, TimeoutException):
@@ -433,6 +432,7 @@ class PostgresDB(DB):
             return tend - tstart
 
     def _run_workload(self, workload, filename):
+        print(workload["workload_qdir"], workload["workload_qlist_qfile"])
         with open(filename, "w") as f:
             f.write("query\tlat(ms)\n")
 

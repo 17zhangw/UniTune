@@ -122,8 +122,8 @@ class RLEstimator(Advisor):
                 base_dir = os.path.abspath(os.curdir)
                 self.estimator.parser = None
                 self.estimator.model = None
-                with open(os.path.join(base_dir, '{}.pkl'.format(self.task_id)), 'wb') as f:
-                    pickle.dump(self.estimator, f)
+                #with open(os.path.join(base_dir, '{}.pkl'.format(self.task_id)), 'wb') as f:
+                #    pickle.dump(self.estimator, f)
                 return config_best, time_cost_best
 
             i = i + 1

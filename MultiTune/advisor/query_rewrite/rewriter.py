@@ -65,8 +65,8 @@ class Rewriter():
                 data_source = JdbcSchema.dataSource("jdbc:mysql://127.0.0.1:{}/{}?useSSL=false&socket=/data2/ruike/mysql8/base/mysql.sock".format(db.port, db.dbname),
                                                 'com.mysql.jdbc.Driver', db.user, db.passwd)
             elif db.dbtype == 'postgres':
-                data_source = JdbcSchema.dataSource("jdbc:postgresql://" + db.host + ':' + str(db.port) + '/',
-                                   'org.postgresql.Driver', db.user, db.password)
+                data_source = JdbcSchema.dataSource("jdbc:postgresql://" + db.host + ':' + str(db.port) + '/benchbase',
+                                   'org.postgresql.Driver', db.user, db.passwd)
             schema = root_schema.add(db.dbname, JdbcSchema.create(root_schema, db.dbname, data_source, None, None))
             # config = Frameworks.newConfigBuilder().parserConfig(SqlParser.Config.setCaseSensitive(False)).build()
             parserConfig = SqlParser.configBuilder(SqlParser.Config.DEFAULT).setCaseSensitive(False).build()

@@ -1,3 +1,4 @@
+from pathlib import Path
 import json
 import os
 import pdb
@@ -65,7 +66,6 @@ class CostEstimator():
         argus["password"] = self.db.passwd
         argus["port"] = self.db.port
         argus["database"] = self.db.dbname
-        argus["sock"] = self.db.sock
         parser = SqlParser(argus)
         self.parser = parser
         return parser
@@ -234,7 +234,9 @@ class CostEstimator():
     def conduct_supply(self, eval_dir):
         try:
             time_all, space_cost, config = self.evaluate(eval_dir)
-        except:
+        except Exception as e:
+            print(e)
+            assert False
             time_all, space_cost = [self.db.workload_timeout, self.db.workload_timeout], self.budget - 1
         time_cost = time_all[0]
         print(self.db.time_cost_dir)
@@ -255,18 +257,19 @@ class CostEstimator():
 
     def record_rewrite_sql(self, eval_dir):
         v = self.query_timestamp
-        workload_qdir = self.db.workload_qdir.replace(self.db.workload_qdir.split('_')[-1], str(v)) + '/'
-        workload_qlist_file = self.db.workload_qlist_file.replace(self.db.workload_qlist_file.split('_')[-1], str(v)) + '.txt'
+        workload_qdir = "logs/workload_qdirs/" + str(v) + "/"
+        workload_qlist_file = "logs/workload_qdirs/" + str(v) + ".txt"
 
         if os.path.exists(workload_qdir):
             shutil.rmtree(workload_qdir)
 
-        os.mkdir(workload_qdir)
+        Path(workload_qdir).mkdir(parents=True, exist_ok=True)
         for k in eval_dir.keys():
             with open(os.path.join(workload_qdir, k), 'w') as f:
                 f.write(eval_dir[k][0].replace('\n', ' '))
 
         qlist = list(eval_dir.keys())
+        qlist = sorted(qlist, key=lambda x: int(x.split(".sql")[0]))
         with open(workload_qlist_file, 'w') as f:
             for q in qlist:
                 f.write(q + '\n')

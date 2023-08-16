@@ -28,6 +28,8 @@ def parse_cmd_args():
     parser.add_argument('--gamma', type=float, default=0.1,
                         help='Rate of explorations of uncovered rewrite orders')
 
+    parser.add_argument('--config-ini', default=None)
+
     args = parser.parse_args()
     #argus = vars(args)
 

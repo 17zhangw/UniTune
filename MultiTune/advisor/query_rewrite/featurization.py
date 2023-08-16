@@ -4,9 +4,7 @@ import numpy as np
 import pandas
 import json
 import os
-import pymysql
-#from keras.models import Sequential, Model
-#from keras.layers import Dense, Dropout, Input
+import psycopg
 
 predictor_output_dim = 65
 query_types = ["insert", "delete", "update", "select"]
@@ -60,7 +58,7 @@ class SqlParser:
 
         self.resfile = os.path.join("scripts/") + "output.res"
         self.argus = argus
-        self.conn = self.mysql_conn()
+        self.conn = self.pg_conn()
         self.tables = self.get_database_tables()
         self.query_encoding_map = {}
         ########### Convert from the sql statement to the sql vector
@@ -100,7 +98,6 @@ class SqlParser:
         result = [0 for i in range(len(self.tables) + len(query_types))]
         # [0, 0, 0, 0, X, X, X..........]
         query_split_list = query.lower().split(" ")
-
         for index, query_type in enumerate(query_types):
             if query_type in query_split_list:
                 result[index] = 1
@@ -113,33 +110,32 @@ class SqlParser:
         from MultiTune.utils.limit import time_limit, TimeoutException
         try:
             with time_limit(5):
-                explain_format_fetchall = self.mysql_query("EXPLAIN FORMAT=JSON {};".format(query))
+                explain_format_fetchall = self.query("EXPLAIN (FORMAT JSON) {};".format(query))
         except  Exception as e:
             if isinstance(e, TimeoutException):
                 print("Timed out!")
         if not explain_format_fetchall:
             print("explain_format_fetchall is empty, query: {}".format(query))
-            return np.array([0]*21)
+            return result
 
-        explain_format = json.loads(explain_format_fetchall[0][0])
-        explain_format_tables_list = self.get_explain_format_tables_list([], explain_format.get("query_block"), "table")
-        #if not explain_format.get("query_block")== 'no matching row in const table':
-        #    pdb.set_trace()
-        for explain_format_table in explain_format_tables_list:
-            explain_format_table_name = explain_format_table["table_name"]
-            try:
-                index = query_split_list.index(explain_format_table_name)
-            except:
-                continue
-            if query_split_list[index - 1].lower() == "as":
-                explain_format_table_name = query_split_list[index - 2]
-            else:
-                explain_format_table_name = query_split_list[index]
+        explain_format = explain_format_fetchall[0][0]
 
-            for index, table_name in enumerate(self.tables):
-                if explain_format_table_name == table_name and "cost_info" in  explain_format_table.keys():
-                    result[index + len(query_types)] = float(explain_format_table["cost_info"]["prefix_cost"])
-                    continue
+        def flatten_table(data):
+            datum = {}
+            for k, v in data.items():
+                if k == "Plans":
+                    for vv in v:
+                        datum.update(flatten_table(vv))
+                elif k == "Plan":
+                    datum.update(flatten_table(v))
+                elif k == "Relation Name":
+                    datum[v] = data["Total Cost"]
+            return datum
+
+        explain_format_tables_list = flatten_table(explain_format[0])
+        for index, table_name in enumerate(self.tables):
+            if table_name in explain_format_tables_list:
+                result[index + len(query_types)] = explain_format_tables_list[table_name]
         self.query_encoding_map[str(query)] = result
         return result
 
@@ -159,48 +155,39 @@ class SqlParser:
     def update(self):
         pass
 
-    def mysql_conn(self):
-        conn = pymysql.connect(
-            host=self.argus["host"],
-            user=self.argus["user"],
-            passwd=self.argus["password"],
-            port=int(self.argus["port"]),
-            connect_timeout=30,
-            charset='utf8',
-            unix_socket=self.argus["sock"])
-        conn.select_db(self.argus["database"])
+    def pg_conn(self):
+        host = self.argus["host"]
+        user = self.argus["user"]
+        password = self.argus["password"]
+        port = self.argus["port"]
+        db = self.argus["database"]
+
+        conn = psycopg.connect(
+            f"host={host} user={user} password={password} port={port} dbname={db}",
+            autocommit=True,
+            prepare_threshold=None)
+
         return conn
 
-    def close_mysql_conn(self):
+    def close_pg_conn(self):
         try:
             self.conn.close()
         except Exception as error:
-            print("close mysqlconn: " + str(error))
+            print("close conn: " + str(error))
 
-    def mysql_query(self, sql):
+    def query(self, sql):
         try:
             cursor = self.conn.cursor()
-            count = cursor.execute("select 1;")
-        except:
-            self.conn = self.mysql_conn()
-
-        try:
-            cursor = self.conn.cursor()
-            count = cursor.execute(sql)
-            if count == 0:
-                result = 0
-            else:
-                result = cursor.fetchall()
+            result = cursor.execute(sql).fetchall()
             cursor.close()
             return result
         except Exception as error:
-            print("mysql execute: " + str(error))
+            print("execute: " + str(error))
             return None
 
     def get_database_tables(self):
         # get all tables
-        tables_fetchall = self.mysql_query(
-            "select table_name from information_schema.tables where table_schema='{}';".format(self.argus["database"]))
+        tables_fetchall = self.query("select table_name from information_schema.tables where table_schema='public';")
         tables = []
         if not tables_fetchall:
             print("tables was not found")

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from pathlib import Path
 import pickle
 import random
 import math
@@ -98,6 +99,7 @@ class LearnedRewrite(RLEstimator):
 
 
     def rewrite_sql(self, iteration):
+        Path("logs/rewrite_result").mkdir(parents=True, exist_ok=True)
         sql_file = open(self.db.workload_qlist_file, 'r')
         sql_types = sql_file.readlines()
         rewrite_result = {}
@@ -106,10 +108,7 @@ class LearnedRewrite(RLEstimator):
             type = type.strip()
             self.estimator.current_query_type = type
             f = open(os.path.join(self.db.workload_qdir, type))
-            if self.db.workload_name == 'job':
-                sql = f.readlines()[0].strip().strip().lower()
-            else:
-                sql = f.readlines()[0].strip().strip().upper()
+            sql = f.read().strip().lower()
             f.close()
             origin_runtime = self.estimator.previous_cost_estimation_rf(sql, sql, [], record_rules=[])
             #print(str(type) + " origin runtime: " + str(origin_runtime))
@@ -130,7 +129,7 @@ class LearnedRewrite(RLEstimator):
 
             rewritten_runtime = self.estimator.previous_cost_estimation_rf(sql, rewritten_sql, rewrite_sequence, record_rules=rewrite_sequence)
             self.logger.info(type + " origin runtime: " + str(origin_runtime) + ", after-rewrite runtime: " + str(  rewritten_runtime) + ", rules:" + str(rewrite_sequence))
-            f_out = "rewrite_result/sql_rf_{}.json".format(iteration)
+            f_out = "logs/rewrite_result/sql_rf_{}.json".format(iteration)
             if os.path.exists(f_out):
                 f = open(f_out, 'r')
                 result_dir = json.load(f)
