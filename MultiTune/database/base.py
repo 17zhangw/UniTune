@@ -1,3 +1,4 @@
+from pathlib import Path
 import traceback
 import random
 import os
@@ -31,10 +32,10 @@ import gymnasium as gym
 
 
 class DB(ABC):
-    def __init__(self, task_id, dbtype, host, port, user, passwd, dbname, cnf, knob_config_file, knob_num,
+    def __init__(self, task_id, dbtype, host, port, user, passwd, dbname, cnf, postgres, benchbase, knob_config_file, knob_num,
                  workload_name, workload_timeout, per_query_timeout, parallel_query_eval,
                  parallel_max_workers, workload_qlist_file, workload_qdir, q_mv_file, mv_trainset_dir,
-                 log_path='./logs', result_path='./logs/results', restart_wait_time=5, **kwargs
+                 benchbase_config, log_path='./logs', result_path='./logs/results', restart_wait_time=5, **kwargs
                  ):
         # database
         self.task_id = task_id
@@ -47,6 +48,9 @@ class DB(ABC):
         self.cnf = cnf
         self.all_pk_fk = None
         self.all_columns = None
+        self.postgres = postgres
+        self.benchbase = benchbase
+        self.benchbase_config = benchbase_config
      
         # logger
         self.log_path = log_path
@@ -327,12 +331,23 @@ class DB(ABC):
                 'parallel_query_eval': self.parallel_query_eval,
                 'parallel_max_workers': self.parallel_max_workers,
             }
+        elif self.workload_name in ['tpcc']:
+            wl = {
+                'benchmark': self.workload_name,
+                'postgres': self.postgres,
+                'benchbase': self.benchbase,
+                'benchbase_config': self.benchbase_config,
+                'results': "/tmp/results",
+            }
         else:
             raise ValueError('Invalid workload name')
         return wl
 
     def get_queries(self):
         queries = []
+        if len(self.workload_qlist_file) == 0:
+            return queries
+
         with open(self.workload_qlist_file, 'r') as f:
             query_list = f.read().strip().split('\n').copy()
 
@@ -387,6 +402,7 @@ class DB(ABC):
                 continue
 
         all_used_columns = list(all_used_columns)
+        all_used_columns = [a.lower() for a in all_used_columns]
         result = list()
 
         for column in all_used_columns:
@@ -499,12 +515,16 @@ class DB(ABC):
         self.logger.debug("Iteration {}: Benchmark start, saving results to {}!".format(self.iteration, filename))
 
         # run the benchmark...
-        self._run_workload(workload, filename)
+        reconnect = self._run_workload(workload, filename)
+        if reconnect:
+            conn.close()
+            conn = self._connect_db()
 
         # stop collecting internal metrics
         final_metrics = self.state_space.construct_online(connection=conn)
         delta = self.state_space.construct_metric_delta(initial_metrics, final_metrics)
         im_result = gym.spaces.utils.flatten(self.state_space, delta)
+        conn.close()
 
         # get costs
         time.sleep(1)
@@ -514,6 +534,15 @@ class DB(ABC):
             dirname, _ = os.path.split(os.path.abspath(__file__))
             time_cost, lat_mean, time_cost_dir = parse_benchmark_result(filename, workload_qlist_file, self.workload_timeout, self.per_query_timeout)
             self.time_cost_dir = time_cost_dir
+        elif self.workload_name in ['tpcc']:
+            files = [f for f in Path(workload["results"]).rglob("*.summary.json")]
+            assert len(files) == 1
+            with open(files[0], "r") as f:
+                data = json.load(f)
+                # Negate the tps metric so we're properly "minimizing it".
+                time_cost = -data["Throughput (requests/second)"]
+                lat_mean = data["Latency Distribution"]["Average Latency (microseconds)"]
+                self.time_cost_dir = {}
         else:
             raise ValueError
 
