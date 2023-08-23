@@ -106,6 +106,9 @@ def parse_benchmark_result(file_path, select_file, timeout=10, per_query_timeout
         lat = np.sum(latL)
         lat_mean = np.mean(latL)
 
+    # Don't attempt to minimize the mean query execution but minimize the entire thing.
+    lat_mean = lat
+
     return lat, lat_mean, lat_dir
 
 
