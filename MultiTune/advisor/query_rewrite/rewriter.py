@@ -161,7 +161,7 @@ class Rewriter():
         # print(' formatted sql '.center(60, '-'))
 
         # format_sql = self.parse_quote(sql.lower())
-        format_sql = self.parse_quote(sql.lower()).replace('`', '')
+        format_sql = self.parse_quote(sql).replace('`', '')
         # format_sql = sql
         # print(format_sql)
         is_rewritten, ra = self.SQL2RA(format_sql, ruleid)
@@ -183,32 +183,6 @@ class Rewriter():
                 return 0, ''
         else:
             return 0, ''
-
-
-'''
-    def single_rewrite_check(self, sql, ruleid):
-
-        sql = sql.replace(";", "")
-        sql = sql.lower()
-
-
-
-        sql_node = self.planner.parse(SourceStringReader(sql))
-        print(sql_node)
-        sql_node = self.planner.validate(sql_node)
-        rel_root = self.planner.rel(sql_node)
-        rel_node = rel_root.project()
-
-        ruledir = jp.JPackage('org.apache.calcite.rel.rules')
-        # judge whether the rule works
-        if eval(self.rulelist[ruleid]).getOperand().matches(rel_node) == True:
-            sql = self.single_rewrite(sql, ruleid)
-            # judge whether this sql is executable
-            if self.db.validate_sqlsql) != '':
-                return True
-
-        return False
-'''
 
 
 def rewrite(args, db, estimator, origin_cost, origin_type, sql):

@@ -108,7 +108,7 @@ class LearnedRewrite(RLEstimator):
             type = type.strip()
             self.estimator.current_query_type = type
             f = open(os.path.join(self.db.workload_qdir, type))
-            sql = f.read().strip().lower()
+            sql = f.read().strip()
             f.close()
             origin_runtime = self.estimator.previous_cost_estimation_rf(sql, sql, [], record_rules=[])
             #print(str(type) + " origin runtime: " + str(origin_runtime))
