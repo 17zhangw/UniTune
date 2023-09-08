@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 import json
 import os
@@ -269,7 +270,7 @@ class CostEstimator():
                 f.write(eval_dir[k][0].replace('\n', ' '))
 
         qlist = list(eval_dir.keys())
-        qlist = sorted(qlist, key=lambda x: int(x.split(".sql")[0]))
+        qlist = sorted(qlist, key=lambda x: int(re.search("[0-9]+", x).group()))
         with open(workload_qlist_file, 'w') as f:
             for q in qlist:
                 f.write(q + '\n')

@@ -522,11 +522,12 @@ class PostgresDB(DB):
             self._run_benchbase(workload)
             return True
 
-        print(workload["workload_qdir"], workload["workload_qlist_qfile"])
+        workload_qdir = workload["workload_qdir"]
+        workload_qlist_qfile = workload["workload_qlist_qfile"]
+        self.logger.info(f"Running {workload_qdir} {workload_qlist_qfile}")
         with open(filename, "w") as f:
             f.write("query\tlat(ms)\n")
 
-            workload_qdir = workload["workload_qdir"]
             sqls = []
             with open(workload["workload_qlist_qfile"], "r") as q:
                 for qfile in q:
