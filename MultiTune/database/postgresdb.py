@@ -197,12 +197,38 @@ class PostgresDB(DB):
         return True
 
     def _modify_cnf(self, config):
+        conn = self._connect_db()
+        require_checkpoint = False
+        for key, val in config.items():
+            if "_fillfactor" in key:
+                tbl = key.split("_fillfactor")[0]
+
+                pgc_record = [r for r in conn.execute(f"SELECT * FROM pg_class where relname = '{tbl}'", prepare=False)][0]
+                orig_ff = None
+                if pgc_record["reloptions"] is not None:
+                    for record in pgc_record["reloptions"]:
+                        for key, value in re.findall(r'(\w+)=(\w*)', record):
+                            if key == "fillfactor":
+                                orig_ff = int(value)
+
+                if orig_ff is None or orig_ff != int(val):
+                    conn.execute(f"ALTER TABLE {tbl} SET (fillfactor = {val}")
+                    conn.execute(f"VACUUM FULL {tbl}")
+                    require_checkpoint = True
+
+        if require_checkpoint:
+            conn.execute("CHECKPOINT")
+
         with open(f"{self.postgres}/pgdata/postgresql.auto.conf", "w") as f:
             for key, val in config.items():
+                if "_fillfactor" in key:
+                    continue
+
                 f.write(f"{key} = {val}")
                 f.write("\n")
 
         self.logger.debug('Modify db config file successfully.')
+        conn.close()
         return True
 
     def _create_index(self, table, column, name=None, advise_prefix='advisor'):
@@ -251,9 +277,10 @@ class PostgresDB(DB):
 
     def reset_knob(self):
         default_knob = {knob: self.knob_details[knob]['default'] for knob in self.knob_details.keys()}
-        self._close_db()
         self._modify_cnf(default_knob)
+
         self.logger.info('Reset Knob: Set Default knobs.')
+        self._close_db()
         self._start_db()
 
     def reset_all(self, advisor_only=True, advisor_prefix='advisor'):
@@ -270,9 +297,10 @@ class PostgresDB(DB):
         self.logger.info('Reset Index: Drop all indexes, advisor_only={}!'.format(advisor_only))
 
         default_knob = {knob: self.knob_details[knob]['default'] for knob in self.knob_details.keys()}
-        self._close_db()
         self._modify_cnf(default_knob)
         self.logger.info('Reset Knob: Set Default knobs.')
+
+        self._close_db()
         self._start_db()
 
     def get_pk_fk(self):

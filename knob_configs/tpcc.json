@@ -524,5 +524,77 @@
         "max": 4194304,
         "scope": "Global",
         "type": "integer"
+    },
+    "warehouse_fillfactor": {
+        "default": 100,
+        "dynamic": "Yes",
+        "min": 10,
+        "max": 100,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "district_fillfactor": {
+        "default": 100,
+        "dynamic": "Yes",
+        "min": 10,
+        "max": 100,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "customer_fillfactor": {
+        "default": 100,
+        "dynamic": "Yes",
+        "min": 10,
+        "max": 100,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "history_fillfactor": {
+        "default": 100,
+        "dynamic": "Yes",
+        "min": 10,
+        "max": 100,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "oorder_fillfactor": {
+        "default": 100,
+        "dynamic": "Yes",
+        "min": 10,
+        "max": 100,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "order_line_fillfactor": {
+        "default": 100,
+        "dynamic": "Yes",
+        "min": 10,
+        "max": 100,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "new_order_fillfactor": {
+        "default": 100,
+        "dynamic": "Yes",
+        "min": 10,
+        "max": 100,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "stock_fillfactor": {
+        "default": 100,
+        "dynamic": "Yes",
+        "min": 10,
+        "max": 100,
+        "scope": "Global",
+        "type": "integer"
+    },
+    "item_fillfactor": {
+        "default": 100,
+        "dynamic": "Yes",
+        "min": 10,
+        "max": 100,
+        "scope": "Global",
+        "type": "integer"
     }
 }

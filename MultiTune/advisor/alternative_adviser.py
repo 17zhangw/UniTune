@@ -696,9 +696,11 @@ class TopAdvisor(ABC):
 
     def apply_best(self):
         self.logger.info(Fore.RED + 'Apply best Index & Query & Knob so far.' + Style.RESET_ALL)
-        self.db._close_db()
         if 'knob' in self.arms:
             self.db.apply_knob_config(self.best_result['knob']['config'])
+
+        # Apply knobs first, then restart.
+        self.db._close_db()
         self.db._start_db()
         for arm in self.arms:
             if not arm == 'knob':

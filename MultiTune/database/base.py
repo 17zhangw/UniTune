@@ -4,6 +4,7 @@ import traceback
 import random
 import os
 import pdb
+import pandas as pd
 import sys
 import time
 import json
@@ -490,9 +491,9 @@ class DB(ABC):
                 q_dir = "logs/workload_qdirs/" + str(v) + "/"
                 workload_qlist_file = "logs/workload_qdirs/" + str(v) + ".txt"
                 self.workload = self.generate_workload(q_dir, workload_qlist_file)
-        self._close_db()
         self.apply_knob_config(knob_config)
 
+        self._close_db()
         start_success = self._start_db()
         if not start_success:
             raise Exception
@@ -513,6 +514,8 @@ class DB(ABC):
 
         # # collect internal metrics
         conn = self._connect_db()
+        # Log pg_class out (with the reloptions)
+        pd.DataFrame([r for r in conn.execute("SELECT * FROM pg_class")]).to_csv(f"{self.result_path}/{timestamp}.pg_class.csv")
         initial_metrics = self.state_space.construct_online(connection=conn)
 
         self.logger.debug("Iteration {}: Benchmark start, saving results to {}!".format(self.iteration, filename))
