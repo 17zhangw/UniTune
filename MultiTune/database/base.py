@@ -1,4 +1,5 @@
 from pathlib import Path
+import pickle
 import traceback
 import random
 import os
@@ -425,7 +426,7 @@ class DB(ABC):
     def generate_benchmark_cmd(self):
         timestamp = int(time.time())
         filename = self.result_path + '/{}.log'.format(timestamp)
-        return self.workload, filename
+        return self.workload, filename, timestamp
 
     def setup_logger(self):
         if not os.path.exists(self.log_path):
@@ -502,12 +503,17 @@ class DB(ABC):
 
         self.apply_index_config(index_config)
 
+        # Save some state to help us reconstruct it later.
+        workload, filename, timestamp = self.generate_benchmark_cmd()
+        existing_indexes = self.get_all_indexes()
+        copyfile(f"{self.postgres}/pgdata/postgresql.auto.conf", f"{self.result_path}/{timestamp}.auto.conf")
+        with open(f"{self.result_path}/{timestamp}.indexes.txt", "w") as f:
+            for k, v in existing_indexes.items():
+                f.write(f"{k} = {v}\n")
+
         # # collect internal metrics
         conn = self._connect_db()
         initial_metrics = self.state_space.construct_online(connection=conn)
-
-        # run benchmark
-        workload, filename = self.generate_benchmark_cmd()
 
         self.logger.debug("Iteration {}: Benchmark start, saving results to {}!".format(self.iteration, filename))
 
