@@ -23,6 +23,7 @@ from ConfigSpace import Configuration
 from multiprocessing import Manager
 from sqlparse.sql import Identifier
 from shutil import copyfile
+from plumbum import local
 from ..utils.parser import strip_config
 
 sys.path.append('..')
@@ -37,7 +38,7 @@ class DB(ABC):
     def __init__(self, task_id, dbtype, host, port, user, passwd, dbname, cnf, postgres, benchbase, knob_config_file, knob_num,
                  workload_name, workload_timeout, per_query_timeout, parallel_query_eval,
                  parallel_max_workers, workload_qlist_file, workload_qdir, q_mv_file, mv_trainset_dir,
-                 benchbase_config, log_path='./logs', result_path='./logs/results', restart_wait_time=5, **kwargs
+                 benchbase_config, log_path='logs', result_path='logs/results', restart_wait_time=5, **kwargs
                  ):
         # database
         self.task_id = task_id
@@ -520,17 +521,32 @@ class DB(ABC):
 
         self.logger.debug("Iteration {}: Benchmark start, saving results to {}!".format(self.iteration, filename))
 
-        # run the benchmark...
-        reconnect = self._run_workload(workload, filename)
-        if reconnect:
+        if "benchmark" in workload:
+            workload["results"] = f"{os.getcwd()}/{self.result_path}/{timestamp}/"
+            Path(workload["results"]).mkdir(parents=True, exist_ok=True)
+
+            self._close_db()
             conn.close()
+
+            local["tar"]["cf", f"{self.postgres}/pgdata.tgz", "-C", self.postgres, "pgdata"].run()
+            self._start_db()
             conn = self._connect_db()
+
+        self._run_workload(workload, filename)
 
         # stop collecting internal metrics
         final_metrics = self.state_space.construct_online(connection=conn)
         delta = self.state_space.construct_metric_delta(initial_metrics, final_metrics)
         im_result = gym.spaces.utils.flatten(self.state_space, delta)
         conn.close()
+
+        if "benchmark" in workload:
+            # Restore the database.
+            self._close_db()
+            local["rm"]["-rf", f"{self.postgres}/pgdata"].run()
+            local["mkdir"]["-m", "0700", "-p", f"{self.postgres}/pgdata"].run()
+            local["tar"]["xf", f"{self.postgres}/pgdata.tgz", "-C", f"{self.postgres}/pgdata", "--strip-components", "1"].run()
+            self._start_db()
 
         # get costs
         time.sleep(1)
@@ -552,8 +568,8 @@ class DB(ABC):
         else:
             raise ValueError
 
-        self.logger.info("Iteration {}: configuration {}\t time_cost {}\t space_cost {}\t lat_mean {}".format(
-            self.iteration, config, time_cost, space_cost, lat_mean))
+        self.logger.info("Iteration {}: configuration {}\t time_cost {}\t space_cost {}\t lat_mean {}\t timestamp {}".format(
+            self.iteration, config, time_cost, space_cost, lat_mean, timestamp))
 
         if time_cost < self.minimum_timeout:
             self.minimum_timeout = time_cost

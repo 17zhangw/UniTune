@@ -459,75 +459,7 @@ class PostgresDB(DB):
             return tend - tstart
 
     def _run_benchbase(self, workload):
-        postgres = workload["postgres"]
-        def _shutdown():
-            while True:
-                _, stdout, stderr = local[f"{postgres}/pg_ctl"][
-                    "stop",
-                    "--wait",
-                    "-t", "180",
-                    "-D", f"{postgres}/pgdata"].run(retcode=None)
-                time.sleep(1)
-
-                # Wait until pg_isready fails.
-                retcode, _, _ = local[f"{postgres}/pg_isready"][
-                    "--host", "localhost",
-                    "--port", "5432",
-                    "--dbname", "benchbase"].run(retcode=None)
-
-                exists = (Path(postgres) / "pgdata" / "postmaster.pid").exists()
-                if not exists and retcode != 0:
-                    break
-
-        def _start():
-            # Make sure the PID lock file doesn't exist.
-            pid_lock = Path(postgres) / "pgdata" / "postmaster.pid"
-            assert not pid_lock.exists()
-
-            attempts = 0
-            while not pid_lock.exists():
-                # Try starting up.
-                retcode, stdout, stderr = local[f"{postgres}/pg_ctl"][
-                    "-D", f"{postgres}/pgdata",
-                    "--wait",
-                    "-t", "180",
-                    "-l", f"{postgres}/pgdata/pg.log",
-                    "start"].run(retcode=None)
-
-                if retcode == 0 or pid_lock.exists():
-                    break
-
-                logging.warn("startup encountered: (%s, %s)", stdout, stderr)
-                attempts += 1
-                if attempts >= 5:
-                    logging.error("Number of attempts to start postgres has exceeded limit.")
-                    assert False
-
-            # Wait until postgres is ready to accept connections.
-            num_cycles = 0
-            while True:
-                if num_cycles >= 5:
-                    # In this case, we've failed to start postgres.
-                    logging.error("Failed to start postgres before timeout...")
-                    assert False
-
-                retcode, _, _ = local[f"{postgres}/pg_isready"][
-                    "--host", "localhost",
-                    "--port", "5432",
-                    "--dbname", "benchbase"].run(retcode=None)
-                if retcode == 0:
-                    break
-
-                time.sleep(1)
-                num_cycles += 1
-
-        _shutdown()
-        local["tar"]["cf", f"{postgres}/pgdata.tgz", "-C", postgres, "pgdata"].run()
-        _start()
-
         with local.cwd(workload["benchbase"]):
-            shutil.rmtree(workload["results"], ignore_errors=True)
-
             code, _, _ = local["java"][
                 "-jar", "benchbase.jar",
                 "-b", workload["benchmark"],
@@ -537,18 +469,11 @@ class PostgresDB(DB):
 
             assert code == 0
 
-        _shutdown()
-        local["rm"]["-rf", f"{postgres}/pgdata"].run()
-        local["mkdir"]["-m", "0700", "-p", f"{postgres}/pgdata"].run()
-        local["tar"]["xf", f"{postgres}/pgdata.tgz", "-C", f"{postgres}/pgdata", "--strip-components", "1"].run()
-        _start()
-        return
-
 
     def _run_workload(self, workload, filename):
         if "benchmark" in workload:
             self._run_benchbase(workload)
-            return True
+            return
 
         workload_qdir = workload["workload_qdir"]
         workload_qlist_qfile = workload["workload_qlist_qfile"]
@@ -616,5 +541,3 @@ class PostgresDB(DB):
                     assert qid in results
                     duration = results[qid]
                     f.write(f"{qid}\t{duration * 1000}\n")
-
-        return False
