@@ -1,3 +1,4 @@
+import re
 import shutil
 import random
 from plumbum import local
@@ -13,6 +14,7 @@ import eventlet
 import csv
 import multiprocessing as mp
 import psycopg
+from psycopg.rows import dict_row
 from pathlib import Path
 
 sys.path.append('..')
@@ -203,7 +205,9 @@ class PostgresDB(DB):
             if "_fillfactor" in key:
                 tbl = key.split("_fillfactor")[0]
 
-                pgc_record = [r for r in conn.execute(f"SELECT * FROM pg_class where relname = '{tbl}'", prepare=False)][0]
+                with conn.cursor(row_factory=dict_row) as cursor:
+                    pgc_record = [r for r in cursor.execute(f"SELECT * FROM pg_class where relname = '{tbl}'", prepare=False)][0]
+
                 orig_ff = None
                 if pgc_record["reloptions"] is not None:
                     for record in pgc_record["reloptions"]:
@@ -212,12 +216,14 @@ class PostgresDB(DB):
                                 orig_ff = int(value)
 
                 if orig_ff is None or orig_ff != int(val):
-                    conn.execute(f"ALTER TABLE {tbl} SET (fillfactor = {val}")
+                    conn.execute(f"ALTER TABLE {tbl} SET (fillfactor = {val})")
                     conn.execute(f"VACUUM FULL {tbl}")
+                    self.logger.debug(f"Issued vacuum {tbl} {val}")
                     require_checkpoint = True
 
         if require_checkpoint:
             conn.execute("CHECKPOINT")
+            self.logger.debug('Issued checkpoint.')
 
         with open(f"{self.postgres}/pgdata/postgresql.auto.conf", "w") as f:
             for key, val in config.items():
