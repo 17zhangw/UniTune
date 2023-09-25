@@ -563,8 +563,7 @@ class DB(ABC):
                 data = json.load(f)
                 # Negate the tps metric so we're properly "minimizing it".
                 time_cost = -data["Throughput (requests/second)"]
-                lat_mean = time_cost
-                #lat_mean = data["Latency Distribution"]["Average Latency (microseconds)"]
+                lat_mean = data["Latency Distribution"]["Average Latency (microseconds)"]
                 self.time_cost_dir = {}
         else:
             raise ValueError
