@@ -512,13 +512,13 @@ class PostgresDB(DB):
                     run_time.append(runtime)
 
                     if not workload["per_query_timeout"]:
-                        # We are using a workload timeout for running serially.
-                        if timed_out:
-                            # We've timed out of the entire budget so stop.
-                            break
-
                         # Adjust remaining time.
                         current_timeout = current_timeout - runtime
+
+                        # We are using a workload timeout for running serially.
+                        if timed_out or current_timeout <= 0:
+                            # We've timed out of the entire budget so stop.
+                            break
 
                 # reset the timeout to the default configuration
                 _force_statement_timeout(conn, 0)
