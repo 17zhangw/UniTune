@@ -70,8 +70,8 @@ class PostgresDB(DB):
             'invalid': {}
         }
 
-        super().__init__(*args, **kwargs)
         self.per_query_knobs = {}
+        super().__init__(*args, **kwargs)
 
     def _connect_str(self):
         return "host={host} port={port} dbname={dbname} user={user} password={password}".format(
@@ -515,19 +515,20 @@ class PostgresDB(DB):
 
                 # Run serially.
                 for (qid, query_sql) in sqls:
+                    qqid = f"Q{int(qid)}_"
                     max_worker = self.per_query_knobs.get("max_worker_processes", 8)
-                    pqkk = [(k, v) for k, v in self.per_query_knobs.items() if k.startswith(f"Q{int(qid)}_")]
-                    pqkk = [f"Set({k}, {v})" for k, v in pqkk if "scanmethod" not in k and "parallel_rel" not in k]
-                    pqkk.extend([f"{v}({k.split('_')[1]})" for k, v in pqkk if "scanmethod" in k])
-                    pqkk.extend([f"Parallel({k} {max_worker})" for k, v in pqkk if "parallel_rel" in k and v != "sentinel"])
+                    pqk = [(k, v) for k, v in self.per_query_knobs.items() if k.startswith(f"{qqid}")]
+                    pqkk = [f"Set({k.split(qqid)[-1]} {v})" for k, v in pqk if "scanmethod" not in k and "parallel_rel" not in k]
+                    pqkk.extend([f"{v}({k.split('_')[1]})" for k, v in pqk if "scanmethod" in k])
+                    pqkk.extend([f"Parallel({v} {max_worker})" for k, v in pqk if "parallel_rel" in k and v != "sentinel"])
 
-                    parts = query_sql.split("\n")
-                    for i, p in enumerate(parts):
-                        if p.lower().startswith("select"):
-                            parts = parts[0:i] + "/*+ " + " ".join(pqkk) + " */" + parts[i:]
-                            break
-                    query_sql = "\n".join(parts)
                     if len(pqkk) > 0:
+                        parts = query_sql.split("\n")
+                        for i, p in enumerate(parts):
+                            if p.lower().startswith("select"):
+                                parts = parts[0:i] + ["/*+ " + " ".join(pqkk) + " */"] + parts[i:]
+                                break
+                        query_sql = "\n".join(parts)
                         self.logger.debug(f"{qid}: {query_sql}")
 
                     runtime, timed_out = run_query(conn, query_sql, current_timeout)
