@@ -71,6 +71,7 @@ class PostgresDB(DB):
         }
 
         super().__init__(*args, **kwargs)
+        self.per_query_knobs = {}
 
     def _connect_str(self):
         return "host={host} port={port} dbname={dbname} user={user} password={password}".format(
@@ -202,7 +203,9 @@ class PostgresDB(DB):
         conn = self._connect_db()
         require_checkpoint = False
         for key, val in config.items():
-            if "_fillfactor" in key:
+            if key.startswith("Q"):
+                self.per_query_knobs[key] = val
+            elif "_fillfactor" in key:
                 tbl = key.split("_fillfactor")[0]
 
                 with conn.cursor(row_factory=dict_row) as cursor:
@@ -220,6 +223,8 @@ class PostgresDB(DB):
                     conn.execute(f"VACUUM FULL {tbl}")
                     self.logger.debug(f"Issued vacuum {tbl} {val}")
                     require_checkpoint = True
+            elif "max_worker_processes" in key:
+                self.per_query_knobs["max_worker_processes"] = val
 
         if require_checkpoint:
             conn.execute("CHECKPOINT")
@@ -229,9 +234,12 @@ class PostgresDB(DB):
             for key, val in config.items():
                 if "_fillfactor" in key:
                     continue
+                if key.startswith("Q"):
+                    continue
 
                 f.write(f"{key} = {val}")
                 f.write("\n")
+            f.write("shared_preload_libraries = 'pg_hint_plan'")
 
         self.logger.debug('Modify db config file successfully.')
         conn.close()
@@ -507,6 +515,21 @@ class PostgresDB(DB):
 
                 # Run serially.
                 for (qid, query_sql) in sqls:
+                    max_worker = self.per_query_knobs.get("max_worker_processes", 8)
+                    pqkk = [(k, v) for k, v in self.per_query_knobs.items() if k.startswith(f"Q{int(qid)}_")]
+                    pqkk = [f"Set({k}, {v})" for k, v in pqkk if "scanmethod" not in k and "parallel_rel" not in k]
+                    pqkk.extend([f"{v}({k.split('_')[1]})" for k, v in pqkk if "scanmethod" in k])
+                    pqkk.extend([f"Parallel({k} {max_worker})" for k, v in pqkk if "parallel_rel" in k and v != "sentinel"])
+
+                    parts = query_sql.split("\n")
+                    for i, p in enumerate(parts):
+                        if p.lower().startswith("select"):
+                            parts = parts[0:i] + "/*+ " + " ".join(pqkk) + " */" + parts[i:]
+                            break
+                    query_sql = "\n".join(parts)
+                    if len(pqkk) > 0:
+                        self.logger.debug(f"{qid}: {query_sql}")
+
                     runtime, timed_out = run_query(conn, query_sql, current_timeout)
                     self.logger.debug(f"{qid}: {runtime} {timed_out}")
                     run_time.append(runtime)
