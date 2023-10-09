@@ -514,12 +514,12 @@ class PostgresDB(DB):
                     current_timeout = int(current_timeout / len(sqls))
 
                 # Run serially.
-                for (qid, query_sql) in sqls:
-                    qqid = f"Q{int(qid)}_"
+                for idx, (qid, query_sql) in enumerate(sqls):
+                    qqid = f"Q{idx+1}_"
                     max_worker = self.per_query_knobs.get("max_worker_processes", 8)
                     pqk = [(k, v) for k, v in self.per_query_knobs.items() if k.startswith(f"{qqid}")]
                     pqkk = [f"Set({k.split(qqid)[-1]} {v})" for k, v in pqk if "scanmethod" not in k and "parallel_rel" not in k]
-                    pqkk.extend([f"{v}({k.split('_')[1]})" for k, v in pqk if "scanmethod" in k])
+                    pqkk.extend([f"{v}({k.split(qqid)[-1].split('_scanmethod')[0]})" for k, v in pqk if "scanmethod" in k])
                     pqkk.extend([f"Parallel({v} {max_worker})" for k, v in pqk if "parallel_rel" in k and v != "sentinel"])
 
                     if len(pqkk) > 0:
