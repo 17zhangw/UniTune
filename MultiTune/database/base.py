@@ -331,7 +331,7 @@ class DB(ABC):
                 'parallel_query_eval': self.parallel_query_eval,
                 'parallel_max_workers': self.parallel_max_workers,
             }
-        elif self.workload_name in ['tpcc', 'epinions']:
+        elif self.workload_name in ['tpcc', 'tatp', 'epinions']:
             wl = {
                 'benchmark': self.workload_name,
                 'postgres': self.postgres,
@@ -556,7 +556,7 @@ class DB(ABC):
             dirname, _ = os.path.split(os.path.abspath(__file__))
             time_cost, lat_mean, time_cost_dir = parse_benchmark_result(filename, workload_qlist_file, self.workload_timeout, self.per_query_timeout)
             self.time_cost_dir = time_cost_dir
-        elif self.workload_name in ['tpcc', 'epinions']:
+        elif self.workload_name in ['tpcc', 'tatp', 'epinions']:
             files = [f for f in Path(workload["results"]).rglob("*.summary.json")]
             assert len(files) == 1
             with open(files[0], "r") as f:
