@@ -221,8 +221,8 @@ class DB(ABC):
         assert list(query_config.keys())[0] == "query.file_id"
         v = query_config[list(query_config.keys())[0]]
         if str(v) != "0":
-            self.workload_qdir = "logs/workload_qdirs/" + str(v) + "/"
-            self.workload_qlist_file = "logs/workload_qdirs/" + str(v) + ".txt"
+            self.workload_qdir = f"{self.log_path}/workload_qdirs/" + str(v) + "/"
+            self.workload_qlist_file = f"{self.log_path}/workload_qdirs/" + str(v) + ".txt"
             self.workload = self.generate_workload(self.workload_qdir, self.workload_qlist_file)
 
 
@@ -489,8 +489,8 @@ class DB(ABC):
                 view_config[k]= v
             elif k.startswith('query.') and not str(v) == '' and str(v) != "0":
                 self.logger.debug("Iteration {}: Query Configuration Applied!".format(self.iteration))
-                q_dir = "logs/workload_qdirs/" + str(v) + "/"
-                workload_qlist_file = "logs/workload_qdirs/" + str(v) + ".txt"
+                q_dir = f"{self.log_path}/workload_qdirs/" + str(v) + "/"
+                workload_qlist_file = f"{self.log_path}/workload_qdirs/" + str(v) + ".txt"
                 self.workload = self.generate_workload(q_dir, workload_qlist_file)
         self.apply_knob_config(knob_config)
 

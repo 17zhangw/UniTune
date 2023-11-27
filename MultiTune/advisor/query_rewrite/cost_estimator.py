@@ -258,8 +258,8 @@ class CostEstimator():
 
     def record_rewrite_sql(self, eval_dir):
         v = self.query_timestamp
-        workload_qdir = "logs/workload_qdirs/" + str(v) + "/"
-        workload_qlist_file = "logs/workload_qdirs/" + str(v) + ".txt"
+        workload_qdir = f"{self.db.log_path}/workload_qdirs/" + str(v) + "/"
+        workload_qlist_file = f"{self.db.log_path}/workload_qdirs/" + str(v) + ".txt"
 
         if os.path.exists(workload_qdir):
             shutil.rmtree(workload_qdir)

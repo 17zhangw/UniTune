@@ -99,7 +99,7 @@ class LearnedRewrite(RLEstimator):
 
 
     def rewrite_sql(self, iteration):
-        Path("logs/rewrite_result").mkdir(parents=True, exist_ok=True)
+        Path(f"{self.db.log_path}/rewrite_result").mkdir(parents=True, exist_ok=True)
         sql_file = open(self.db.workload_qlist_file, 'r')
         sql_types = sql_file.readlines()
         rewrite_result = {}
@@ -129,7 +129,7 @@ class LearnedRewrite(RLEstimator):
 
             rewritten_runtime = self.estimator.previous_cost_estimation_rf(sql, rewritten_sql, rewrite_sequence, record_rules=rewrite_sequence)
             self.logger.info(type + " origin runtime: " + str(origin_runtime) + ", after-rewrite runtime: " + str(  rewritten_runtime) + ", rules:" + str(rewrite_sequence))
-            f_out = "logs/rewrite_result/sql_rf_{}.json".format(iteration)
+            f_out = f"{self.db.log_path}/rewrite_result/sql_rf_{iteration}.json"
             if os.path.exists(f_out):
                 f = open(f_out, 'r')
                 result_dir = json.load(f)
