@@ -508,7 +508,7 @@ class DB(ABC):
         # Save some state to help us reconstruct it later.
         workload, filename, timestamp = self.generate_benchmark_cmd()
         existing_indexes = self.get_all_indexes()
-        copyfile(f"{self.postgres}/pgdata/postgresql.auto.conf", f"{self.result_path}/{timestamp}.auto.conf")
+        copyfile(f"{self.postgres}/pgdata{self.port}/postgresql.auto.conf", f"{self.result_path}/{timestamp}.auto.conf")
         with open(f"{self.result_path}/{timestamp}.indexes.txt", "w") as f:
             for k, v in existing_indexes.items():
                 f.write(f"{k} = {v}\n")
@@ -522,13 +522,14 @@ class DB(ABC):
         self.logger.debug("Iteration {}: Benchmark start, saving results to {}!".format(self.iteration, filename))
 
         if "benchmark" in workload:
+            assert False
             workload["results"] = f"{os.getcwd()}/{self.result_path}/{timestamp}/"
             Path(workload["results"]).mkdir(parents=True, exist_ok=True)
 
             self._close_db()
             conn.close()
 
-            local["tar"]["cf", f"{self.postgres}/pgdata.tgz", "-C", self.postgres, "pgdata"].run()
+            local["tar"]["cf", f"{self.postgres}/pgdata{self.port}.tgz", "-C", self.postgres, f"pgdata{self.port}"].run()
             self._start_db()
             conn = self._connect_db()
 
@@ -541,10 +542,11 @@ class DB(ABC):
         conn.close()
 
         if "benchmark" in workload:
+            assert False
             # Restore the database.
             self._close_db()
-            local["rm"]["-rf", f"{self.postgres}/pgdata"].run()
-            local["mkdir"]["-m", "0700", "-p", f"{self.postgres}/pgdata"].run()
+            local["rm"]["-rf", f"{self.postgres}/pgdata{self.port}"].run()
+            local["mkdir"]["-m", "0700", "-p", f"{self.postgres}/pgdata{self.port}"].run()
             local["tar"]["xf", f"{self.postgres}/pgdata.tgz", "-C", f"{self.postgres}/pgdata", "--strip-components", "1"].run()
             self._start_db()
 
@@ -626,6 +628,7 @@ class DB(ABC):
         return knob_details
 
     def get_all_index_sizes(self, path='/tmp/indexsize.json'):
+        path += f".{self.port}"
         if os.path.exists(path):
             return
 

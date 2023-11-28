@@ -139,7 +139,7 @@ class PostgresDB(DB):
                 "stop",
                 "--wait",
                 "-t", "300",
-                "-D", f"{self.postgres}/pgdata"].run(retcode=None)
+                "-D", f"{self.postgres}/pgdata{self.port}"].run(retcode=None)
             time.sleep(1)
             self.logger.debug("Stop message: (%s, %s)", stdout, stderr)
 
@@ -149,21 +149,21 @@ class PostgresDB(DB):
                 "--port", int(self.port),
                 "--dbname", self.dbname].run(retcode=None)
 
-            exists = (Path(self.postgres) / "pgdata" / "postmaster.pid").exists()
+            exists = (Path(self.postgres) / f"pgdata{self.port}" / "postmaster.pid").exists()
             if not exists and retcode != 0:
                 break
 
         self.logger.debug("Shutdown postgres successfully.")
 
     def _start_db(self, isolation=False):
-        pid_lock = Path(f"{self.postgres}/pgdata/postmaster.pid")
+        pid_lock = Path(f"{self.postgres}/pgdata{self.port}/postmaster.pid")
         assert not pid_lock.exists()
 
         attempts = 0
         while not pid_lock.exists():
             # Try starting up.
             retcode, stdout, stderr = local[f"{self.postgres}/pg_ctl"][
-                "-D", f"{self.postgres}/pgdata",
+                "-D", f"{self.postgres}/pgdata{self.port}",
                 "--wait",
                 "-t", "300",
                 "-l", f"{self.postgres}/pg.log",
@@ -230,7 +230,7 @@ class PostgresDB(DB):
             conn.execute("CHECKPOINT")
             self.logger.debug('Issued checkpoint.')
 
-        with open(f"{self.postgres}/pgdata/postgresql.auto.conf", "w") as f:
+        with open(f"{self.postgres}/pgdata{self.port}/postgresql.auto.conf", "w") as f:
             for key, val in config.items():
                 if "_fillfactor" in key:
                     continue
