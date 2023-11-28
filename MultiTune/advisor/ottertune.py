@@ -28,7 +28,8 @@ class OtterTune(BO):
             current_context=self.current_context,
             context_pca_components = int(kwargs['context_pca_components']),
             random_state=self.random_state,
-            advisor_kwargs={'constraint_budget': self.budget}
+            advisor_kwargs={'constraint_budget': self.budget},
+            logging_dir=self.db.log_path,
         )
 
         if not self.cost_aware:

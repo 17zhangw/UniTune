@@ -35,6 +35,7 @@ class ConfigParser(object):
         f.close()
 
     def replace(self, tmp='/tmp/tmp.cnf'):
+        assert False
         record_list = []
         f1 = open(self._cnf)
         f2 = open(tmp, 'w')

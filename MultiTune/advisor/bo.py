@@ -38,7 +38,8 @@ class BOAdvisor(Advisor):
             task_id=self.task_id,
             time_limit_per_trial=1000,
             random_state=self.random_state,
-            advisor_kwargs={'constraint_budget': self.budget}
+            advisor_kwargs={'constraint_budget': self.budget},
+            logging_dir=self.db.log_path,
         )
         if not self.cost_aware:
             self.bo.max_iterations =  0
