@@ -529,7 +529,7 @@ class PostgresDB(DB):
                     if len(pqkk) > 0:
                         parts = query_sql.split("\n")
                         for i, p in enumerate(parts):
-                            if p.lower().startswith("select"):
+                            if p.lower().startswith("select") or p.lower().startswith("with"):
                                 parts = parts[0:i] + ["/*+ " + " ".join(pqkk) + " */"] + parts[i:]
                                 break
                         query_sql = "\n".join(parts)
