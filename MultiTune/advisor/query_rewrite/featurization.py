@@ -1,3 +1,4 @@
+import time
 import pdb
 
 import numpy as np
@@ -162,10 +163,23 @@ class SqlParser:
         port = self.argus["port"]
         db = self.argus["database"]
 
-        conn = psycopg.connect(
-            f"host={host} user={user} password={password} port={port} dbname={db}",
-            autocommit=True,
-            prepare_threshold=None)
+        print(f"host={host} user={user} port={port} dbname={db}")
+        num_retry = 0
+        while True:
+            try:
+                conn = psycopg.connect(
+                    f"host={host} user={user} port={port} dbname={db}",
+                    autocommit=True,
+                    prepare_threshold=None,
+                    connect_timeout=300)
+                break
+            except Exception as e:
+                print(e)
+                print("Retrying again...")
+                time.sleep(5)
+                num_retry += 1
+                if num_retry >= 5:
+                    assert False
 
         return conn
 

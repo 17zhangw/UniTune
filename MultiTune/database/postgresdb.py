@@ -71,6 +71,7 @@ class PostgresDB(DB):
         }
 
         self.per_query_knobs = {}
+        self.logged = False
         super().__init__(*args, **kwargs)
 
     def _connect_str(self):
@@ -83,7 +84,10 @@ class PostgresDB(DB):
         )
 
     def _connect_db(self):
-        conn = psycopg.connect(self._connect_str(), autocommit=True, prepare_threshold=None)
+        if not self.logged:
+            self.logger.debug(f"Connecting to {self._connect_str()}")
+            self.logged = True
+        conn = psycopg.connect(self._connect_str(), autocommit=True, prepare_threshold=None, connect_timeout=300)
         return conn
 
     def _execute(self, sql, conn=None):
@@ -166,7 +170,7 @@ class PostgresDB(DB):
                 "-D", f"{self.postgres}/pgdata{self.port}",
                 "--wait",
                 "-t", "300",
-                "-l", f"{self.postgres}/pg.log",
+                "-l", f"{self.postgres}/pg.log.{self.port}",
                 "start"].run(retcode=None)
 
             if retcode == 0 or pid_lock.exists():
