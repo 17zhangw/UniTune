@@ -321,7 +321,7 @@ class DB(ABC):
         if workload_qlist_file is None:
             workload_qlist_file = self.workload_qlist_file
             
-        if self.workload_name in ['tpch', 'job', 'tpcds']:
+        if self.workload_name in ['tpch', 'job', 'tpcds', 'dsb']:
             wl = {
                 'type': 'read',
                 'workload_qdir': workload_qdir,
@@ -554,7 +554,7 @@ class DB(ABC):
         time.sleep(1)
         space_cost = self.get_index_size()
 
-        if self.workload_name in ['tpch', 'job', 'tpcds']:
+        if self.workload_name in ['tpch', 'job', 'tpcds', 'dsb']:
             dirname, _ = os.path.split(os.path.abspath(__file__))
             time_cost, lat_mean, time_cost_dir = parse_benchmark_result(filename, workload_qlist_file, self.workload_timeout, self.per_query_timeout)
             self.time_cost_dir = time_cost_dir
