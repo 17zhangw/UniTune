@@ -49,6 +49,10 @@ from org.apache.calcite.sql import SqlNode, SqlDialect
 from org.apache.calcite.sql.dialect import CalciteSqlDialect, PostgresqlSqlDialect
 from org.apache.calcite.tools import FrameworkConfig, Frameworks, Planner, RelBuilderFactory
 from org.apache.calcite.util import SourceStringReader
+from org.apache.calcite.sql.parser.babel import SqlBabelParserImpl
+from org.apache.calcite.sql.validate import SqlConformanceEnum
+from org.apache.calcite.sql.fun import SqlLibrary, SqlLibraryOperatorTableFactory
+from org.apache.calcite.sql2rel import SqlToRelConverter
 
 
 class Rewriter():
@@ -69,7 +73,8 @@ class Rewriter():
                                    'org.postgresql.Driver', db.user, db.passwd)
             schema = root_schema.add(db.dbname, JdbcSchema.create(root_schema, db.dbname, data_source, None, None))
             # config = Frameworks.newConfigBuilder().parserConfig(SqlParser.Config.setCaseSensitive(False)).build()
-            parserConfig = SqlParser.configBuilder(SqlParser.Config.DEFAULT).setCaseSensitive(False).build()
+            # parserConfig = SqlParser.configBuilder(SqlParser.Config.DEFAULT).setCaseSensitive(False).build()
+            parserConfig = SqlParser.configBuilder().setConformance(SqlConformanceEnum.BABEL).setParserFactory(SqlBabelParserImpl.FACTORY).setCaseSensitive(False).build()
             config = Frameworks.newConfigBuilder().defaultSchema(schema).parserConfig(parserConfig).build()
 
             # defaultSchema(schema).parserConfig(SqlParser.configBuilder().setCaseSensitive(False).build()).build()
