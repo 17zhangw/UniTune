@@ -40,6 +40,7 @@ class BOAdvisor(Advisor):
             random_state=self.random_state,
             advisor_kwargs={'constraint_budget': self.budget},
             logging_dir=self.db.log_path,
+            indexsize_file=f"/tmp/indexsize.json.{self.db.port}",
         )
         if not self.cost_aware:
             self.bo.max_iterations =  0

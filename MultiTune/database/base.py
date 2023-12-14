@@ -643,7 +643,3 @@ class DB(ABC):
 
         with open(path, 'w') as f:
             json.dump(indexsize, f, indent=4)
-
-        with open("/tmp/indexsize.json", "w") as f:
-            # FIXME: Pray.
-            json.dump(indexsize, f, indent=4)

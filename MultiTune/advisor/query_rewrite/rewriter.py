@@ -62,7 +62,7 @@ class Rewriter():
         try:
             if planner: pass
         except:
-            conn = DriverManager.getConnection('jdbc:calcite:')
+            conn = DriverManager.getConnection('jdbc:calcite:fun=standard,postgresql')
             calcite_conn = conn.unwrap(CalciteConnection)
             root_schema = calcite_conn.getRootSchema()
             if db.dbtype == 'mysql':
