@@ -205,7 +205,7 @@ class CostEstimator():
                 timestamp = time.time()
                 eval_dir[query_type.split('.')[0] + '_' + str(timestamp) + '.sql'] = demand[query_type].pop(0)
 
-        print(eval_dir.keys())
+        print("gen_eval_dir: ", eval_dir.keys())
 
         return eval_dir
 
@@ -236,11 +236,11 @@ class CostEstimator():
         try:
             time_all, space_cost, config = self.evaluate(eval_dir)
         except Exception as e:
-            print(e)
+            print("conduct_supply exception", e)
             assert False
             time_all, space_cost = [self.db.workload_timeout, self.db.workload_timeout], self.budget - 1
         time_cost = time_all[0]
-        print(self.db.time_cost_dir)
+        print("time_cost_dir: ", self.db.time_cost_dir)
         with open("time.res", 'a') as f:
             f.write(str(self.db.time_cost_dir) + '\n')
         for type in eval_dir.keys():

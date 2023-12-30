@@ -25,7 +25,7 @@ classpath.extend([os.path.join(local_lib_dir, jar) for jar in os.listdir(local_l
 # print('\n'.join(classpath))
 
 if not jp.isJVMStarted():
-    jp.startJVM(jp.getDefaultJVMPath(), classpath=classpath)
+    jp.startJVM("-Xss4M", jvmpath=jp.getDefaultJVMPath(), classpath=classpath)
 
 from javax.sql import DataSource
 from java.sql import Connection, DriverManager
