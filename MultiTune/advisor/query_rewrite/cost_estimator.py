@@ -271,9 +271,15 @@ class CostEstimator():
 
         qlist = list(eval_dir.keys())
         qlist = sorted(qlist, key=lambda x: int(re.search("[0-9]+", x).group()))
+        with open(self.db.orig_workload_qlist_file) as f:
+            query_list = f.read().strip().split('\n').copy()
+            query_list = [q.strip() for q in query_list]
+
+        # Write in the same order.
         with open(workload_qlist_file, 'w') as f:
-            for q in qlist:
-                f.write(q + '\n')
+            for q in query_list:
+                if q in qlist:
+                    f.write(q + "\n")
 
     def previous_cost_estimation(self, origin_sql, rewrite_sql, rewrite_sequence, context=None):
         # input: sql

@@ -72,6 +72,7 @@ class DB(ABC):
         self.parallel_query_eval = parallel_query_eval == "on"
         self.parallel_max_workers = int(parallel_max_workers)
         self.minimum_timeout = float(workload_timeout)
+        self.orig_workload_qlist_file = workload_qlist_file
         self.workload_qlist_file = workload_qlist_file
         self.workload_qdir = workload_qdir
         self.q_mv_file = q_mv_file
