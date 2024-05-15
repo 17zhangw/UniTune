@@ -38,7 +38,7 @@ class DB(ABC):
     def __init__(self, task_id, dbtype, host, port, user, passwd, dbname, cnf, postgres, benchbase, knob_config_file, knob_num,
                  workload_name, workload_timeout, per_query_timeout, parallel_query_eval,
                  parallel_max_workers, workload_qlist_file, workload_qdir, q_mv_file, mv_trainset_dir,
-                 benchbase_config, log_path='logs', result_path='logs/results', restart_wait_time=5, **kwargs
+                 benchbase_config, log_path='logs', result_path='logs/results', restart_wait_time=5, mqo=False, **kwargs
                  ):
         # database
         self.task_id = task_id
@@ -79,6 +79,7 @@ class DB(ABC):
         self.mv_trainset_dir = mv_trainset_dir
         self.workload = self.generate_workload()
         self.queries = self.get_queries()
+        self.mqo = (mqo == "on")
 
         # knob
         self.knob_num = int(knob_num)
@@ -209,6 +210,7 @@ class DB(ABC):
             else:
                 _knob_config[k] = knob_config[k]
 
+        self._pre_modify_knobs()
         flag = self._modify_cnf(_knob_config)
         if not flag:
             #copyfile(self.cnf.replace('experiment', 'default'), self.cnf)
@@ -470,10 +472,11 @@ class DB(ABC):
         return all_cost, space_cost
 
 
-    def evaluate(self, config, collect_im=True):
+    def evaluate(self, config, collect_im=True, pqk=False):
         #return(np.random.random(), np.random.random()), 0, np.random.random(65)
         self.iteration += 1
 
+        orig_config_object = config
         if isinstance(config, Configuration):
             config = config.get_dictionary()
 
@@ -534,7 +537,37 @@ class DB(ABC):
             self._start_db()
             conn = self._connect_db()
 
-        self._run_workload(workload, filename)
+        # Attempt to back install.
+        consolidate_flags = self._run_workload(workload, filename, pqk=pqk)
+        if pqk:
+            default_config = orig_config_object.configuration_space.get_default_configuration()
+            for k, (varname, pghint, flags, ams) in consolidate_flags.items():
+                kflags = set([key for key in orig_config_object.get_dictionary().keys() if k in key])
+                for kflag, vflag in flags:
+                    kflag = f"knob.{kflag}"
+                    assert kflag in orig_config_object.get_dictionary()
+                    orig_config_object[kflag] = vflag
+                    kflags.remove(kflag)
+
+                for kflag in kflags:
+                    if "seq_page_cost" in kflag:
+                        orig_config_object[kflag] = 1
+                    elif "random_page_cost" in kflag:
+                        orig_config_object[kflag] = 4
+                    elif "hash_mem_multiplier" in kflag:
+                        orig_config_object[kflag] = 2
+                    elif "scanmethod" in kflag:
+                        tbl = kflag.split(k)[-1].split("_scanmethod")[0]
+                        if tbl in ams:
+                            orig_config_object[kflag] = "NoSeqScan" if ("Index" in ams[tbl] or "Bitmap" in ams[tbl]) else "SeqScan"
+                        else:
+                            orig_config_object[kflag] = "SeqScan"
+                    elif "parallel_rel" in kflag:
+                        orig_config_object[kflag] = "sentinel"
+                    else:
+                        orig_config_object[kflag] = "on"
+            orig_config_object.is_valid_configuration()
+            consolidate_flags = {k: v[0] for k, v in consolidate_flags.items()}
 
         # stop collecting internal metrics
         final_metrics = self.state_space.construct_online(connection=conn)
@@ -576,7 +609,11 @@ class DB(ABC):
 
         if time_cost < self.minimum_timeout:
             self.minimum_timeout = time_cost
-        return (lat_mean, time_cost), space_cost, im_result
+
+        if pqk:
+            return (lat_mean, time_cost), space_cost, im_result, (orig_config_object, consolidate_flags)
+        else:
+            return (lat_mean, time_cost), space_cost, im_result
 
     def im_alive_init(self):
         global im_alive

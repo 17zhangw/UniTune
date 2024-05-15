@@ -1,3 +1,5 @@
+import math
+import copy
 import re
 import shutil
 import random
@@ -36,13 +38,35 @@ def _force_statement_timeout(conn, timeout):
             pass
 
 
+def parse_access_method(explain_data):
+    def recurse(data):
+        sub_data = {}
+        if "Plans" in data:
+            for p in data["Plans"]:
+                sub_data.update(recurse(p))
+        elif "Plan" in data:
+            sub_data.update(recurse(data["Plan"]))
+
+        if "Alias" in data:
+            sub_data[data["Alias"]] = data["Node Type"]
+        return sub_data
+    return recurse(explain_data)
+
+
 def run_query(conn, query_sql, timeout):
+    ams = {}
     timed_out = False
     _force_statement_timeout(conn, timeout)
     try:
         # Run the real query.
         start_time = time.time()
-        conn.execute(query_sql)
+
+        # Take the explain.
+        query_sql = f"EXPLAIN (ANALYZE, TIMING OFF, FORMAT JSON) " + query_sql
+        cursor = conn.execute(query_sql)
+        plan = [c for c in cursor][0][0][0]
+        ams = parse_access_method(plan)
+
         runtime = time.time() - start_time
     except QueryCanceled:
         runtime = timeout
@@ -52,13 +76,13 @@ def run_query(conn, query_sql, timeout):
         timed_out = True
 
     _force_statement_timeout(conn, 0)
-    return runtime, timed_out
+    return runtime, timed_out, ams
 
 
 def parallel_run_query(args):
     conn_str, qid, query_sql, timeout = args
     with psycopg.connect(conn_str, autocommit=True, prepare_threshold=None) as conn:
-        runtime, timed_out = run_query(conn, query_sql, timeout)
+        runtime, timed_out, _ = run_query(conn, query_sql, timeout)
     return qid, runtime, timed_out
 
 
@@ -71,6 +95,7 @@ class PostgresDB(DB):
         }
 
         self.per_query_knobs = {}
+        self.prior_query_knobs = {}
         self.logged = False
         super().__init__(*args, **kwargs)
 
@@ -202,6 +227,11 @@ class PostgresDB(DB):
             self.logger.debug("Waiting for postgres to bootup but it is not...")
 
         return True
+
+    def _pre_modify_knobs(self):
+        # Save the prior query knobs.
+        self.prior_query_knobs = copy.deepcopy(self.per_query_knobs)
+
 
     def _modify_cnf(self, config):
         conn = self._connect_db()
@@ -476,6 +506,42 @@ class PostgresDB(DB):
                       str(tend - tstart) + " seconds.")
             return tend - tstart
 
+    def build_variations(self, qqid, epqk=False):
+        max_worker = self.per_query_knobs.get("max_worker_processes", 8)
+        pqk = [(k, v) for k, v in self.per_query_knobs.items() if k.startswith(f"{qqid}")]
+        pqkk = [f"Set({k.split(qqid)[-1]} {v})" for k, v in pqk if "scanmethod" not in k and "parallel_rel" not in k]
+        pqkk.extend([f"{v}({k.split(qqid)[-1].split('_scanmethod')[0]})" for k, v in pqk if "scanmethod" in k])
+        pqkk.extend([f"Parallel({v} {max_worker})" for k, v in pqk if "parallel_rel" in k and v != "sentinel"])
+        if not self.mqo or not epqk:
+            return [("PerQuery", pqkk, pqk)]
+
+        ss = [f"Set({k.split(qqid)[-1]} {v})" for k, v in pqk if "scanmethod" not in k and "parallel_rel" not in k]
+        ss.extend(["Set(enable_hashjoin ON) Set(enable_mergejoin ON) Set(enable_nestloop OFF)"])
+        ss.extend([f"SeqScan({k.split(qqid)[-1].split('_scanmethod')[0]})" for k, _ in pqk if "scanmethod" in k])
+        sspqk = [(k, v if "scanmethod" not in k else "SeqScan") for k, v in pqk]
+
+        isk = [f"Set({k.split(qqid)[-1]} {v})" for k, v in pqk if "scanmethod" not in k and "parallel_rel" not in k]
+        isk.extend(["Set(enable_hashjoin OFF) Set(enable_mergejoin OFF) Set(enable_nestloop ON)"])
+        isk.extend([f"NoSeqScan({k.split(qqid)[-1].split('_scanmethod')[0]})" for k, _ in pqk if "scanmethod" in k])
+        iskk = [(k, v if "scanmethod" not in k else "NoSeqScan") for k, v in pqk]
+
+        iskg = [f"NoSeqScan({k.split(qqid)[-1].split('_scanmethod')[0]})" for k, _ in pqk if "scanmethod" in k]
+        iskgk = [(k, "NoSeqScan") for k, v in pqk if "scanmethod" in k]
+
+        max_worker = self.prior_query_knobs.get("max_worker_processes", 8)
+        prior = [(k, v) for k, v in self.prior_query_knobs.items() if k.startswith(f"{qqid}")]
+        prior_kk = [f"Set({k.split(qqid)[-1]} {v})" for k, v in prior if "scanmethod" not in k and "parallel_rel" not in k]
+        prior_kk.extend([f"{v}({k.split(qqid)[-1].split('_scanmethod')[0]})" for k, v in prior if "scanmethod" in k])
+        prior_kk.extend([f"Parallel({v} {max_worker})" for k, v in prior if "parallel_rel" in k and v != "sentinel"])
+        return [
+            ("Prior", prior_kk, prior), #Prior
+            ("Global", [""], []), #Global
+            ("PerQuery", pqkk, pqk), #Selected
+            ("SS", ss, sspqk), #SeqScan Prior
+            ("IS", isk, iskk), #INLJ Prior
+            ("ISG", iskg, iskgk), #INLJ Prior
+        ]
+
     def _run_benchbase(self, workload):
         with local.cwd(workload["benchbase"]):
             code, _, _ = local["java"][
@@ -488,14 +554,15 @@ class PostgresDB(DB):
             assert code == 0
 
 
-    def _run_workload(self, workload, filename):
+    def _run_workload(self, workload, filename, pqk=False):
         if "benchmark" in workload:
             self._run_benchbase(workload)
-            return
+            return {}
 
         workload_qdir = workload["workload_qdir"]
         workload_qlist_qfile = workload["workload_qlist_qfile"]
         self.logger.info(f"Running {workload_qdir} {workload_qlist_qfile}")
+        consolidate_flags = {}
         with open(filename, "w") as f:
             f.write("query\tlat(ms)\n")
 
@@ -520,24 +587,33 @@ class PostgresDB(DB):
                 # Run serially.
                 for idx, (qid, query_sql) in enumerate(sqls):
                     qqid = f"Q{idx+1}_"
-                    max_worker = self.per_query_knobs.get("max_worker_processes", 8)
-                    pqk = [(k, v) for k, v in self.per_query_knobs.items() if k.startswith(f"{qqid}")]
-                    pqkk = [f"Set({k.split(qqid)[-1]} {v})" for k, v in pqk if "scanmethod" not in k and "parallel_rel" not in k]
-                    pqkk.extend([f"{v}({k.split(qqid)[-1].split('_scanmethod')[0]})" for k, v in pqk if "scanmethod" in k])
-                    pqkk.extend([f"Parallel({v} {max_worker})" for k, v in pqk if "parallel_rel" in k and v != "sentinel"])
+                    variations = self.build_variations(qqid, epqk=pqk)
+                    self.logger.info(f"{qqid}: OBtained {len(variations)}")
 
-                    if len(pqkk) > 0:
-                        parts = query_sql.split("\n")
-                        for i, p in enumerate(parts):
-                            if p.lower().startswith("select") or p.lower().startswith("with"):
-                                parts = parts[0:i] + ["/*+ " + " ".join(pqkk) + " */"] + parts[i:]
-                                break
-                        query_sql = "\n".join(parts)
-                        self.logger.debug(f"{qid}: {query_sql}")
+                    active_timeout = current_timeout
+                    best_config = None
+                    for (varname, kvariation, varflags) in variations:
+                        qsql = query_sql
+                        if len(kvariation) > 0:
+                            parts = qsql.split("\n")
+                            for i, p in enumerate(parts):
+                                if p.lower().startswith("select") or p.lower().startswith("with"):
+                                    parts = parts[0:i] + ["/*+ " + " ".join(kvariation) + " */"] + parts[i:]
+                                    break
+                            qsql = "\n".join(parts)
+                            # self.logger.debug(f"{qqid}-{varname}: {qsql}")
 
-                    runtime, timed_out = run_query(conn, query_sql, current_timeout)
-                    self.logger.debug(f"{qid}: {runtime} {timed_out}")
-                    run_time.append(runtime)
+                        runtime, timed_out, ams = run_query(conn, qsql, active_timeout)
+                        self.logger.info(f"{qqid}-{varname}: {runtime} {timed_out}")
+                        if best_config is None or (not timed_out and runtime < active_timeout):
+                            active_timeout = math.ceil(runtime)
+                            best_config = (varname, kvariation, varflags, ams, runtime)
+
+                    assert best_config is not None
+                    runtime = best_config[-1]
+                    run_time.append(best_config[-1])
+                    consolidate_flags[qqid] = (best_config[0], "/*+ " + " ".join(best_config[1]) + " */", best_config[2], ams)
+                    self.logger.info(f"{qqid}: {runtime}")
 
                     if not workload["per_query_timeout"]:
                         # Adjust remaining time.
@@ -575,3 +651,5 @@ class PostgresDB(DB):
                     assert qid in results
                     duration = results[qid]
                     f.write(f"{qid}\t{duration * 1000}\n")
+
+        return consolidate_flags

@@ -94,14 +94,24 @@ class BOAdvisor(Advisor):
         self.data.append(record)
 
     def evaluate(self, config):
+        arm = list(config.get_dictionary().keys())[0].split('.')[0] + '_' + str(self.pull_num)
+        pqk = "knob" in arm
+        consolidate_flags = {}
+
         try:
-            time_cost, space_cost, _ = self.db.evaluate(config)
-        except:
+            if pqk:
+                time_cost, space_cost, _, config_obj = self.db.evaluate(config, pqk=True)
+                config = config_obj[0]
+                consolidate_flags = config_obj[1]
+            else:
+                time_cost, space_cost, _ = self.db.evaluate(config, pqk=False)
+        except Exception as e:
             time_cost, space_cost = [self.db.workload_timeout, self.db.workload_timeout], self.budget - 1
 
         with open(self.output_file, 'a') as f:
             f.write('{}\n'.format({
                 'configuration': config.get_dictionary(),
+                'consolidate_flags': consolidate_flags,
                 'time_cost': time_cost,
                 'space_cost': space_cost,
                 'time_spent': time.time() - self.time_begin,
@@ -109,7 +119,7 @@ class BOAdvisor(Advisor):
             }))
 
         self.time_begin = time.time()
-        return {'objs': [time_cost[0], ], 'constraints': [float(space_cost) - float(self.budget), ]}
+        return {'objs': [time_cost[0], ], 'constraints': [float(space_cost) - float(self.budget), ], 'config': config}
    
     def run(self):
         if not self.cost_aware:
@@ -153,14 +163,26 @@ class BO(BOAdvisor):
         self.current_context = current_context
 
     def evaluate(self, config):
-        try:
-            time_cost, space_cost, _ =  self.db.evaluate(config) #time_cost, space_cost, _ =  self.db.evaluate(config) #
-        except:
-            time_cost, space_cost = [self.db.workload_timeout, self.db.workload_timeout], self.budget - 1
+        arm = list(config.get_dictionary().keys())[0].split('.')[0] + '_' + str(self.pull_num)
+        pqk = "knob" in arm
+        consolidate_flags = {}
+
+        # Stop swallowing errors.
+        #try:
+        if pqk:
+            time_cost, space_cost, _, config_obj = self.db.evaluate(config, pqk=True)
+            config = config_obj[0]
+            consolidate_flags = config_obj[1]
+        else:
+            time_cost, space_cost, _ = self.db.evaluate(config, pqk=False)
+        #except Exception as e:
+        #    self.logger.error(f"{e}")
+        #    time_cost, space_cost = [self.db.workload_timeout, self.db.workload_timeout], self.budget - 1
 
         with open(self.output_file, 'a') as f:
             f.write('{}\n'.format({
                 'configuration': config.get_dictionary(),
+                'consolidate_flags': consolidate_flags,
                 'time_cost': time_cost,
                 'space_cost': space_cost,
                 'context': self.current_context.tolist(),
@@ -168,7 +190,7 @@ class BO(BOAdvisor):
                 'arm': list(config.get_dictionary().keys())[0].split('.')[0] + '_' + str(self.pull_num)
             }))
         self.time_begin = time.time()
-        return {'objs': [time_cost[0], ], 'constraints': [float(space_cost) - float(self.budget), ]}
+        return {'objs': [time_cost[0], ], 'constraints': [float(space_cost) - float(self.budget), ], 'config': config}
 
     def run(self):
         if not self.cost_aware:
@@ -218,6 +240,7 @@ class BO(BOAdvisor):
         # only evaluate non duplicate configuration
         if config not in self.model.config_advisor.history_container.configurations:
             start_time = time.time()
+
             try:
                 # evaluate configuration on objective_function within time_limit_per_trial
                 #args, kwargs = (config,), dict()

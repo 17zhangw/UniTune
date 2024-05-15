@@ -52,33 +52,3 @@ class Advisor(ABC):
 
         logger.setLevel('INFO')
         return logger
-
-
-class NoIndexAdvisor(Advisor):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.default_config = self.get_default_config()
-
-    def get_default_config(self):
-        return {c: 'off' for c in self.db.all_index_candidates}
-
-    def run(self):
-        time_cost, space_cost = self.db.evaluate(self.default_config)
-        return self.default_config, time_cost, space_cost
-
-
-class AllIndexAdvisor(Advisor):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.default_config = self.get_default_config()
-
-    def get_default_config(self):
-        return {c: 'on' for c in self.db.all_index_candidates}
-
-    def run(self):
-        time_cost, space_cost = self.db.evaluate(self.default_config)
-
-        with open(self.output_file, 'a') as f:
-            f.write('{}|lat_{}|size_{}\n'.format(self.default_config, time_cost, space_cost))
-
-        return self.default_config, time_cost, space_cost
