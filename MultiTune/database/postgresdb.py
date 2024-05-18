@@ -561,95 +561,115 @@ class PostgresDB(DB):
 
         workload_qdir = workload["workload_qdir"]
         workload_qlist_qfile = workload["workload_qlist_qfile"]
-        self.logger.info(f"Running {workload_qdir} {workload_qlist_qfile}")
+        self.logger.info(f"Running {workload_qdir} {workload_qlist_qfile} => {filename}")
         consolidate_flags = {}
+
+        sqls = []
+        hack_view = False
+        with open(workload["workload_qlist_qfile"], "r") as q:
+            for qfile in q:
+                qfile = qfile.strip()
+
+                query = qfile.split(".")[0]
+                qfile = f"{workload_qdir}/{qfile}"
+                with open(qfile, "r") as qq:
+                    ss = qq.read().strip()
+                    hack_view = hack_view or "revenue0_PID" in ss
+                sqls.append((query, ss))
+
+        if not workload["parallel_query_eval"]:
+            run_time = []
+            conn = self._connect_db()
+
+            if hack_view:
+                conn.execute("""
+create or replace view revenue0_PID (supplier_no, total_revenue) as
+	select
+		l_suppkey,
+		sum(l_extendedprice * (1 - l_discount))
+	from
+		lineitem
+	where
+		l_shipdate >= date '1994-09-01'
+		and l_shipdate < date '1994-09-01' + interval '3' month
+	group by
+		l_suppkey;
+                """)
+
+            current_timeout = workload["workload_timeout"]
+            if workload["per_query_timeout"]:
+                current_timeout = int(current_timeout / len(sqls))
+
+            # Run serially.
+            for idx, (qid, query_sql) in enumerate(sqls):
+                qqid = f"Q{idx+1}_"
+                variations = self.build_variations(qqid, epqk=pqk)
+                self.logger.info(f"{qqid}: Obtained {len(variations)}")
+
+                active_timeout = current_timeout
+                best_config = None
+                for (varname, kvariation, varflags) in variations:
+                    qsql = query_sql
+                    if len(kvariation) > 0:
+                        parts = qsql.split("\n")
+                        for i, p in enumerate(parts):
+                            if p.lower().startswith("select") or p.lower().startswith("with"):
+                                parts = parts[0:i] + ["/*+ " + " ".join(kvariation) + " */"] + parts[i:]
+                                break
+                        qsql = "\n".join(parts)
+                        # self.logger.debug(f"{qqid}-{varname}: {qsql}")
+
+                    runtime, timed_out, ams = run_query(conn, qsql, active_timeout)
+                    self.logger.info(f"{qqid}-{varname}: {runtime} {timed_out}")
+                    if best_config is None or (not timed_out and runtime < active_timeout):
+                        active_timeout = math.ceil(runtime)
+                        best_config = (varname, kvariation, varflags, ams, timed_out, runtime)
+
+                assert best_config is not None
+                timed_out = best_config[-2]
+                runtime = best_config[-1]
+                run_time.append(best_config[-1])
+                consolidate_flags[qqid] = (best_config[0], "/*+ " + " ".join(best_config[1]) + " */", best_config[2], best_config[3])
+                self.logger.info(f"{qqid}: {runtime} {timed_out}")
+
+                if not workload["per_query_timeout"]:
+                    # Adjust remaining time.
+                    current_timeout = current_timeout - runtime
+
+                    # We are using a workload timeout for running serially.
+                    if timed_out or current_timeout <= 0:
+                        # We've timed out of the entire budget so stop.
+                        break
+        else:
+            assert workload["per_query_timeout"]
+            timeout = int(workload["workload_timeout"] / len(sqls))
+            conn_str = self._connect_str()
+
+            max_workers = workload["parallel_max_workers"] if workload["parallel_max_workers"] > 0 else None
+            results = {}
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                tasks = [(conn_str, qid, qsql, timeout) for qid, qsql in sqls]
+                futures = {executor.submit(parallel_run_query, (conn_str, qid, qsql, timeout)) for qid, qsql in sqls}
+                for future in concurrent.futures.as_completed(futures):
+                    qid, runtime, _ = future.result()
+                    results[qid] = runtime
+                    self.logger.debug(f"{qid}: {runtime}")
+
+            for (qid, _) in sqls:
+                assert qid in results
+                duration = results[qid]
+                f.write(f"{qid}\t{duration * 1000}\n")
+
         with open(filename, "w") as f:
             f.write("query\tlat(ms)\n")
 
-            sqls = []
-            with open(workload["workload_qlist_qfile"], "r") as q:
-                for qfile in q:
-                    qfile = qfile.strip()
+            for (query, _), duration in zip(sqls[:len(run_time)], run_time):
+                f.write(f"{query}\t{duration * 1000}\n")
+        self.logger.info(f"Committed results: {filename}")
 
-                    query = qfile.split(".")[0]
-                    qfile = f"{workload_qdir}/{qfile}"
-                    with open(qfile, "r") as qq:
-                        ss = qq.read().strip()
-                    sqls.append((query, ss))
-
-            if not workload["parallel_query_eval"]:
-                run_time = []
-                conn = self._connect_db()
-                current_timeout = workload["workload_timeout"]
-                if workload["per_query_timeout"]:
-                    current_timeout = int(current_timeout / len(sqls))
-
-                # Run serially.
-                for idx, (qid, query_sql) in enumerate(sqls):
-                    qqid = f"Q{idx+1}_"
-                    variations = self.build_variations(qqid, epqk=pqk)
-                    self.logger.info(f"{qqid}: OBtained {len(variations)}")
-
-                    active_timeout = current_timeout
-                    best_config = None
-                    for (varname, kvariation, varflags) in variations:
-                        qsql = query_sql
-                        if len(kvariation) > 0:
-                            parts = qsql.split("\n")
-                            for i, p in enumerate(parts):
-                                if p.lower().startswith("select") or p.lower().startswith("with"):
-                                    parts = parts[0:i] + ["/*+ " + " ".join(kvariation) + " */"] + parts[i:]
-                                    break
-                            qsql = "\n".join(parts)
-                            # self.logger.debug(f"{qqid}-{varname}: {qsql}")
-
-                        runtime, timed_out, ams = run_query(conn, qsql, active_timeout)
-                        self.logger.info(f"{qqid}-{varname}: {runtime} {timed_out}")
-                        if best_config is None or (not timed_out and runtime < active_timeout):
-                            active_timeout = math.ceil(runtime)
-                            best_config = (varname, kvariation, varflags, ams, runtime)
-
-                    assert best_config is not None
-                    runtime = best_config[-1]
-                    run_time.append(best_config[-1])
-                    consolidate_flags[qqid] = (best_config[0], "/*+ " + " ".join(best_config[1]) + " */", best_config[2], ams)
-                    self.logger.info(f"{qqid}: {runtime}")
-
-                    if not workload["per_query_timeout"]:
-                        # Adjust remaining time.
-                        current_timeout = current_timeout - runtime
-
-                        # We are using a workload timeout for running serially.
-                        if timed_out or current_timeout <= 0:
-                            # We've timed out of the entire budget so stop.
-                            break
-
-                # reset the timeout to the default configuration
-                _force_statement_timeout(conn, 0)
-                conn.execute("drop view if exists revenue0_PID;")
-                conn.close()
-
-                for (query, _), duration in zip(sqls[:len(run_time)], run_time):
-                    f.write(f"{query}\t{duration * 1000}\n")
-
-            else:
-                assert workload["per_query_timeout"]
-                timeout = int(workload["workload_timeout"] / len(sqls))
-                conn_str = self._connect_str()
-
-                max_workers = workload["parallel_max_workers"] if workload["parallel_max_workers"] > 0 else None
-                results = {}
-                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    tasks = [(conn_str, qid, qsql, timeout) for qid, qsql in sqls]
-                    futures = {executor.submit(parallel_run_query, (conn_str, qid, qsql, timeout)) for qid, qsql in sqls}
-                    for future in concurrent.futures.as_completed(futures):
-                        qid, runtime, _ = future.result()
-                        results[qid] = runtime
-                        self.logger.debug(f"{qid}: {runtime}")
-
-                for (qid, _) in sqls:
-                    assert qid in results
-                    duration = results[qid]
-                    f.write(f"{qid}\t{duration * 1000}\n")
+        # reset the timeout to the default configuration
+        _force_statement_timeout(conn, 0)
+        conn.execute("drop view if exists revenue0_PID;")
+        conn.close()
 
         return consolidate_flags

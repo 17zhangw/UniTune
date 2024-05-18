@@ -560,8 +560,10 @@ class DB(ABC):
                         tbl = kflag.split(k)[-1].split("_scanmethod")[0]
                         if tbl in ams:
                             orig_config_object[kflag] = "NoSeqScan" if ("Index" in ams[tbl] or "Bitmap" in ams[tbl]) else "SeqScan"
+                            self.logger.debug(f"{kflag} from {varname} -> Regress to {ams[tbl]}")
                         else:
                             orig_config_object[kflag] = "SeqScan"
+                            self.logger.debug(f"{kflag} from {varname} -> Default to SeqScan")
                     elif "parallel_rel" in kflag:
                         orig_config_object[kflag] = "sentinel"
                     else:
