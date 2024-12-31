@@ -101,7 +101,7 @@ class DB(ABC):
         self.reset_knob()
         self.reset_all()
 
-        self.state_space = MetricStateSpace(tables=self.all_columns.keys(), seed=random.randint(0, 1e6))
+        self.state_space = MetricStateSpace(tables=self.all_columns.keys(), use_memory=False, seed=random.randint(0, 1e6))
 
     @abstractmethod
     def _connect_db(self):
