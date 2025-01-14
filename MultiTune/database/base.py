@@ -674,6 +674,9 @@ class DB(ABC):
 
         indexsize = {}
         default = {index: 'off' for index in self.all_index_candidates}
+        self.apply_index_config(default)
+        self.get_index_size() # Do this to seed the initial PK index sizes..
+
         for index in self.all_index_candidates:
             config = default.copy()
             config[index] = 'on'
