@@ -97,6 +97,7 @@ class PostgresDB(DB):
         self.per_query_knobs = {}
         self.prior_query_knobs = {}
         self.logged = False
+        self.pk_size = None
         super().__init__(*args, **kwargs)
 
     def _connect_str(self):
@@ -403,13 +404,22 @@ class PostgresDB(DB):
         return float(data_size)
 
     def get_index_size(self):
+        if self.pk_size is None:
+            sql = """
+            SELECT ROUND(SUM(pg_relation_size(indexrelid)) / (1024 * 1024), 2) AS "Total"
+            FROM pg_index, pg_class cls
+            WHERE pg_index.indexrelid = cls.oid and cls.relnamespace = 2200
+            """
+            index_size = self._fetch_results(sql, json=False)[0][0]
+            self.pk_size = float(index_size)
+
         sql = """
             SELECT ROUND(SUM(pg_indexes_size(table_name::regclass)) / (1024 * 1024), 2) AS "Total Index Size"
             FROM INFORMATION_SCHEMA.TABLES
             WHERE TABLE_SCHEMA = 'public'
         """
         index_size = self._fetch_results(sql, json=False)[0][0]
-        return float(index_size)
+        return float(index_size) - self.pk_size
 
     def estimate_query_cost(self, query):
         sql = "EXPLAIN (FORMAT JSON) {}".format(query)
