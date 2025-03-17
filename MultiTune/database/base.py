@@ -37,7 +37,7 @@ import gymnasium as gym
 class DB(ABC):
     def __init__(self, task_id, dbtype, host, port, user, passwd, dbname, cnf, postgres, benchbase, knob_config_file, knob_num,
                  workload_name, workload_timeout, per_query_timeout, parallel_query_eval,
-                 parallel_max_workers, workload_qlist_file, workload_qdir, q_mv_file, mv_trainset_dir,
+                 parallel_max_workers, history_load, workload_qlist_file, workload_qdir, q_mv_file, mv_trainset_dir,
                  benchbase_config, log_path='logs', result_path='logs/results', restart_wait_time=5, mqo=False, **kwargs
                  ):
         # database
@@ -71,6 +71,9 @@ class DB(ABC):
         self.per_query_timeout = per_query_timeout == "on"
         self.parallel_query_eval = parallel_query_eval == "on"
         self.parallel_max_workers = int(parallel_max_workers)
+        self.history_load = None if history_load == "None" else Path(history_load)
+        if self.history_load:
+            assert self.history_load.exists()
         self.minimum_timeout = float(workload_timeout)
         self.orig_workload_qlist_file = workload_qlist_file
         self.workload_qlist_file = workload_qlist_file
@@ -668,16 +671,20 @@ class DB(ABC):
         return knob_details
 
     def get_all_index_sizes(self, path='/tmp/indexsize.json'):
+        indexsize = {}
         path += f".{self.port}"
         if os.path.exists(path):
-            return
+            with open(path) as f:
+                indexsize = json.load(f)
 
-        indexsize = {}
         default = {index: 'off' for index in self.all_index_candidates}
         self.apply_index_config(default)
         self.get_index_size() # Do this to seed the initial PK index sizes..
 
         for index in self.all_index_candidates:
+            if index in indexsize:
+                continue
+
             config = default.copy()
             config[index] = 'on'
             self.apply_index_config(config)
