@@ -1,9 +1,11 @@
 import pdb
+import copy
 import sys
 import os
 import numpy as np
 import configparser
 from sqlparse.sql import Where, Comparison, Identifier, Parenthesis
+from pathlib import Path
 
 from shutil import copyfile
 
@@ -173,6 +175,28 @@ def parse_run_history(filename, budget):
             inc = i
 
     return time_costs, space_costs, arms, time_spent, inc_config, inc
+
+
+def parse_run_best(filename, workload_timeout):
+    fs = [f for f in Path(filename).glob("*.res")][0]
+    with open(fs) as f:
+        lines = f.readlines()[1:]
+    lines_best = [line[5:] for line in lines if "best|" in line]
+    run_cost = workload_timeout
+
+    global_config = {}
+    configs = []
+    for line in lines_best:
+        tmp = eval(line.strip())
+        config = tmp['configuration']
+        time_cost = tmp['time_cost']
+
+        if time_cost[0] <= run_cost:
+            global_config.update(config)
+            configs.append(copy.deepcopy(global_config))
+            run_cost = time_cost[0]
+    return configs
+
 
 def strip_config(config):
     config_stripped = {}

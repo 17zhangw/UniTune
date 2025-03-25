@@ -71,9 +71,7 @@ class DB(ABC):
         self.per_query_timeout = per_query_timeout == "on"
         self.parallel_query_eval = parallel_query_eval == "on"
         self.parallel_max_workers = int(parallel_max_workers)
-        self.history_load = None if history_load == "None" else Path(history_load)
-        if self.history_load:
-            assert self.history_load.exists()
+        self.history_load = None if history_load == "None" else history_load
         self.minimum_timeout = float(workload_timeout)
         self.orig_workload_qlist_file = workload_qlist_file
         self.workload_qlist_file = workload_qlist_file

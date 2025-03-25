@@ -1,4 +1,5 @@
 import pdb
+from pathlib import Path
 import os
 import sys
 import copy
@@ -9,7 +10,7 @@ import scipy.stats as ss
 import matplotlib.pyplot as plt
 from colorama import Fore, Back, Style
 sys.path.append('..')
-from ..utils.parser import  get_increasing_sequence, parse_run_history
+from ..utils.parser import  get_increasing_sequence, parse_run_history, parse_run_best
 from ..utils.draw import plot_beta
 from .bo import BOAdvisor, BO
 from .learnedrewrite import LearnedRewrite
@@ -153,8 +154,19 @@ class TopAdvisor(ABC):
             self.default['all']['view.file_id'] = 0
 
         if self.db.history_load:
-            # Load the configuration.
-            _, _, _, _, config, _ = parse_run_history(self.db.history_load, self.budget)
+            if "best-" in self.db.history_load:
+                qdata = self.db.history_load.split("best-")[-1].split(",")[0]
+                qdir = Path(qdata).parent.parent
+                slot = int(Path(qdata).parts[-1])
+
+                wtimeout = int(self.db.history_load.split(",")[-1])
+                configs = parse_run_best(qdir, wtimeout)
+                config = configs[slot]
+
+            else:
+                # Load the configuration.
+                _, _, _, _, config, _ = parse_run_history(Path(self.db.history_load), self.budget)
+
             arms = list(self.default.keys())
             for arm in arms:
                 if arm != "query":
