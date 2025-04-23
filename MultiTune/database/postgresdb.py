@@ -1,3 +1,4 @@
+import time
 import math
 import copy
 import re
@@ -74,6 +75,14 @@ def run_query(conn, query_sql, timeout):
     except InternalError:
         runtime = timeout
         timed_out = True
+    except Exception as e:
+        if "consuming input failed" in str(e:)
+            runtime = timeout
+            timed_out = True
+            # Give it a minute.
+            time.sleep(60)
+        else:
+            raise
 
     _force_statement_timeout(conn, 0)
     return runtime, timed_out, ams
