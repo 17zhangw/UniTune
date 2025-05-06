@@ -109,6 +109,13 @@ class LearnedRewrite(RLEstimator):
             self.estimator.current_query_type = type
             f = open(os.path.join(self.db.workload_qdir, type))
             sql = f.read().strip()
+            hset = None
+            if "/*+" in sql:
+                # Split the hint out.
+                assert "*/" in sql
+                hset = sql.split("*/")[0] + "*/"
+                sql = sql.split("*/")[1].strip()
+
             f.close()
             origin_runtime = self.estimator.previous_cost_estimation_rf(sql, sql, [], record_rules=[])
             #print(str(type) + " origin runtime: " + str(origin_runtime))
@@ -124,8 +131,15 @@ class LearnedRewrite(RLEstimator):
                     self.logger.info("Timed out!")
                 else:
                     self.logger.info('{}: Exception when calling objective function: {}'.format(type,e))
+
+                if hset is not None:
+                    sql = hset + " " + sql
                 rewrite_result[type] = (sql, None, [])
                 continue
+
+            if hset is not None:
+                # Reattach hintset.
+                rewritten_sql = hset + " " + rewritten_sql
 
             rewritten_runtime = self.estimator.previous_cost_estimation_rf(sql, rewritten_sql, rewrite_sequence, record_rules=rewrite_sequence)
             self.logger.info(type + " origin runtime: " + str(origin_runtime) + ", after-rewrite runtime: " + str(  rewritten_runtime) + ", rules:" + str(rewrite_sequence))

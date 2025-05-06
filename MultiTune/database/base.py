@@ -23,6 +23,7 @@ from ConfigSpace import Configuration
 from multiprocessing import Manager
 from sqlparse.sql import Identifier
 from shutil import copyfile
+import shutil
 from plumbum import local
 from ..utils.parser import strip_config
 
@@ -54,6 +55,71 @@ class DB(ABC):
         self.postgres = postgres
         self.benchbase = benchbase
         self.benchbase_config = benchbase_config
+
+        if "boost-" in history_load:
+            with open(history_load.split("boost-")[1]) as f:
+                config = json.load(f)
+            targets = {Path(c["qfile"]).parts[-1]: c["qidx"] for c in config["targets"]}
+            bestc = sorted(config["cardinals"], key=lambda x: x["total_rc"])[0]
+            mworkers = bestc["sysknobs"]["max_worker_processes"]
+
+            bestcq = {}
+            for qc in bestc["qconfigs"]:
+                bestcq.update({k: v for k, v in qc.items() if "qknobs" in k})
+
+            with open(workload_qlist_file) as f:
+                sfiles = [l.strip() for l in f.readlines()]
+
+            new_dir = Path(f"/tmp/wl_{port}")
+            if new_dir.exists():
+                shutil.rmtree(new_dir)
+            new_dir.mkdir(parents=True, exist_ok=True)
+            for sf in sfiles:
+                with open(Path(workload_qdir) / sf) as f:
+                    sql = f.read()
+                hset = []
+                qidx = targets[sf]
+                qknobs = bestcq[f"qknobs{qidx}"]
+                for qk, qv in qknobs.items():
+                    if "Access Method " in qk:
+                        if qv == "Default":
+                            continue
+
+                        qv = {
+                            "Index Scan": "IndexOnlyScan",
+                            "Bitmap Scan": "BitmapScan",
+                            "Seq Scan": "SeqScan",
+                        }[qv]
+
+                        tbl = qk.split(" for ")[1].split(" (")[0].strip()
+                        hset.append(f"{qv}({tbl})")
+
+                    elif "Force Parallel" in qk:
+                        if qv != "None" and qv != "Default":
+                            hset.append(f"Parallel({qv} {mworkers})")
+
+                    elif "Materialize or Inline" in qk:
+                        if qv != "Default":
+                            ctename = qk.split(" Inline CTE ")[1].strip()
+                            mtype = "MATERIALIZE" if qv.lower() == "materialize" else "INLINE"
+                            hset.append(f"Materialize({ctename} {mtype})")
+
+                    elif "enable_" in qk and qv != "Default":
+                        hset.append(f"Set({qk} {1 if qv else 0})")
+
+                    elif qv != "Default":
+                        hset.append(f"Set({qk} {qv})")
+
+                sql = "/*+ " + " ".join(hset) + " */ " + sql
+                with open(f"/tmp/wl_{port}/{sf}", "w") as f:
+                    f.write(sql)
+
+            with open(f"/tmp/wl_{port}/qorder.txt", "w") as f:
+                f.write("\n".join(sfiles).strip())
+
+            # Overwrite.
+            workload_qdir = str(new_dir)
+            workload_qlist_file = str(new_dir / "qorder.txt")
      
         # logger
         self.log_path = log_path
@@ -365,6 +431,9 @@ class DB(ABC):
     def generate_candidates(self):
         all_used_columns = set()
         for i, sql in enumerate(self.queries):
+            if "/*+ " in sql:
+                assert "*/" in sql
+                sql = sql.split(" */ ")[1]
 
             parser = sql_metadata.Parser(sql)
             try:

@@ -58,12 +58,23 @@ def run_query(conn, query_sql, timeout):
     ams = {}
     timed_out = False
     _force_statement_timeout(conn, timeout)
+
+    # Capture diagnostics.
+    diags = []
+    def _diag_handler(diag):
+        nonlocal diags
+        if diag is not None and (diag.message_primary or diag.message_hint or diag.message_detail):
+            diags.append((diag.message_primary, diag.message_hint, diag.message_detail))
+    conn.add_notice_handler(_diag_handler)
+
     try:
         # Run the real query.
         start_time = time.time()
 
         # Take the explain.
         query_sql = f"EXPLAIN (ANALYZE, TIMING OFF, FORMAT JSON) " + query_sql
+        assert len(diags) == 0
+
         cursor = conn.execute(query_sql)
         plan = [c for c in cursor][0][0][0]
         ams = parse_access_method(plan)
@@ -82,8 +93,12 @@ def run_query(conn, query_sql, timeout):
             # Give it a minute.
             time.sleep(60)
         else:
+            if len(diags) > 0:
+                print(diags)
+            print(e, query_sql)
             raise
 
+    conn.remove_notice_handler(_diag_handler)
     _force_statement_timeout(conn, 0)
     return runtime, timed_out, ams
 
@@ -299,6 +314,21 @@ class PostgresDB(DB):
         except Exception as e:
             self.logger.debug('[failed] %s %s' % (sql, e))
 
+    def _force_create_index(self, sql):
+        self._execute(sql)
+        self.logger.info('[success] %s' % sql)
+
+    def _force_drop_boost(self):
+        destruct = False
+        conn = None
+        if conn is None:
+            conn = self._connect_db()
+            destruct = True
+        # Make sure to drop indexes.
+        [conn.execute(f"DROP INDEX {r[0]}") for r in conn.execute("SELECT indexname FROM pg_indexes") if "boost_eindex" in r[0]]
+        if conn and destruct: conn.close()
+
+
     def _drop_index(self, table, name):
         sql = "DROP INDEX %s" % (name)
         try:
@@ -397,6 +427,10 @@ class PostgresDB(DB):
             results = self._fetch_results(sql.format(table), json=False)
             for row in results:
                 name, column = row[1], row[2]
+                # Ignore the "boost_"
+                if "boost_" in name:
+                    continue
+
                 if not advisor_only:
                     indexes['%s.%s' % (table, column)] = name
                 elif name.startswith(advisor_prefix):
@@ -629,7 +663,17 @@ create or replace view revenue0_PID (supplier_no, total_revenue) as
                 best_config = None
                 for (varname, kvariation, varflags) in variations:
                     qsql = query_sql
-                    if len(kvariation) > 0:
+                    if "/*+" in qsql and "*/" in qsql:
+                        assert len(kvariation) == 0
+                        assert len(variations) == 1
+                        # Overwrite and update the Parallel hint.
+                        if "Parallel(" in qsql:
+                            mworkers = self.per_query_knobs.get("max_worker_processes", 8)
+                            prepar = qsql.split("Parallel(")[0]
+                            post = qsql.split("Parallel(")[1]
+                            qsql = prepar + "Parallel(" + post[:post.index(" ")] + " " + str(mworkers) + post[post.index(")"):]
+
+                    elif len(kvariation) > 0:
                         parts = qsql.split("\n")
                         for i, p in enumerate(parts):
                             if p.lower().startswith("select") or p.lower().startswith("with"):

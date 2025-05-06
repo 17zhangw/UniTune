@@ -1,3 +1,4 @@
+import json
 import pdb
 from pathlib import Path
 import os
@@ -154,7 +155,21 @@ class TopAdvisor(ABC):
             self.default['all']['view.file_id'] = 0
 
         if self.db.history_load:
-            if "best-" in self.db.history_load:
+            if "boost-" in self.db.history_load:
+                with open(self.db.history_load.split("boost-")[1]) as f:
+                    cc = json.load(f)
+                    bestc = sorted(cc["cardinals"], key=lambda x: x["total_rc"])[0]
+
+                # Create knobs.
+                sysknobs = bestc["sysknobs"] | {f"knob.{k}": v for k, v in bestc["sysknobs"].items()}
+                config = { "knob": sysknobs }
+
+                self.db._force_drop_boost()
+                indexes = [idx.replace("eindex", "boost_eindex") for idx in bestc["indexes"]]
+                for idx in indexes:
+                    self.db._force_create_index(idx)
+
+            elif "best-" in self.db.history_load:
                 qdata = self.db.history_load.split("best-")[-1].split(",")[0]
                 qdir = Path(qdata).parent.parent
                 slot = int(Path(qdata).parts[-1])
