@@ -107,6 +107,9 @@ class DB(ABC):
                     elif "enable_" in qk and qv != "Default":
                         hset.append(f"Set({qk} {1 if qv else 0})")
 
+                    elif qk in ["dkid"]:
+                        continue
+
                     elif qv != "Default":
                         hset.append(f"Set({qk} {qv})")
 

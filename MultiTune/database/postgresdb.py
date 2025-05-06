@@ -73,11 +73,11 @@ def run_query(conn, query_sql, timeout):
 
         # Take the explain.
         query_sql = f"EXPLAIN (ANALYZE, TIMING OFF, FORMAT JSON) " + query_sql
-        assert len(diags) == 0
 
         cursor = conn.execute(query_sql)
         plan = [c for c in cursor][0][0][0]
         ams = parse_access_method(plan)
+        assert len(diags) == 0
 
         runtime = time.time() - start_time
     except QueryCanceled:
