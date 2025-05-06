@@ -87,7 +87,7 @@ def run_query(conn, query_sql, timeout):
         runtime = timeout
         timed_out = True
     except Exception as e:
-        if "consuming input failed" in str(e:)
+        if "consuming input failed" in str(e):
             runtime = timeout
             timed_out = True
             # Give it a minute.
